@@ -19,8 +19,8 @@ contract Marketplace is ReentrancyGuard {
         bool started
     );
     event AuctionBid();
-    event AuctionCancel();
-    event AuctionEnded();
+    event AuctionCancelled(uint256 auctionId, uint256 tokenId, address seller);
+    event AuctionEnded(uint256 auctionId, address winner, uint256 settledPrice);
 
     uint256 minimumBid = 1e18;
 
@@ -75,7 +75,16 @@ contract Marketplace is ReentrancyGuard {
         );
     }
 
-    function cancelAuction() public {}
+    function cancelAuction(uint256 _auctionId) public {
+        require(auctions[_auctionId].seller == msg.sender, "You are not the seller");
+
+        auctions[_auctionId].started = false;
+        emit AuctionCancelled(
+            _auctionId,
+            auctions[_auctionId].tokenId,
+            msg.sender
+        );
+    }
 
     function placeBid(uint256 _auctionId) external payable {
 
@@ -100,6 +109,8 @@ contract Marketplace is ReentrancyGuard {
         emit AuctionBid();
     }
 
-    function cancelBid() public {}    
+    function cancelBid() public {}
+
+    function endAuction() public {}    
 
 }
