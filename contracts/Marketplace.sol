@@ -111,6 +111,15 @@ contract Marketplace is ReentrancyGuard {
 
     function cancelBid() public {}
 
-    function endAuction() public {}    
+    function endAuction(uint256 _auctionId) public payable {
+        require(auctions[_auctionId].started, "The auction has not started yet");
+        require(block.timestamp < auctions[_auctionId].endTime, "The auction has not ended yet");
+
+        HighestBidder memory highestBidder = highestBids[_auctionId];
+        assetNftContract.safeTransfer(msg.sender, highestBidder.bidder, auctions[_auctionId].tokenId);
+        auctions[_auctionId].started = false;
+
+        emit AuctionEnded(_auctionId, highestBidder.bidder, highestBidder.bid);
+    }    
 
 }
