@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract Fisch is ERC721, ERC721URIStorage, ReentrancyGuard {
+contract Fisch is ERC721URIStorage, ReentrancyGuard {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIdCounter;
 
@@ -15,33 +15,69 @@ contract Fisch is ERC721, ERC721URIStorage, ReentrancyGuard {
     string public baseURI;
 
     // EVENTS
-    event mintedNFT(address indexed owner, string ttile, string description, uint256 tokenId, string assetURI);
+    event MintedNft(
+        address indexed owner,
+        string ttile,
+        string description,
+        uint256 tokenId,
+        string assetURI,
+        uint256 price,
+        uint256 revenue,
+        uint256 expenses,
+        uint256 traffic,
+        string productLink);
 
-    struct digitalAsset {
+    struct DigitalAsset {
         address owner;
         string title;
         string description;
         uint256 tokenId;
+        uint256 price;
         string assetURI;
+        uint256 revenue;
+        uint256 expenses;
+        uint256 traffic;
+        string productLink;
     }
+    mapping(uint256 => DigitalAsset) public digitalAssets;
 
     constructor() ERC721("Fischela", "FIS") {}
 
     function mintNFT(
         string memory _title,
-        string memory description,
-        string memory assetURI
+        string memory _description,
+        string memory _assetURI,
+        uint256 _intialPrice,
+        uint256 _revenue,
+        uint256 _expenses,
+        uint256 _traffic,
+        string memory _productLink
     ) public returns (uint256) {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
         _safeMint(msg.sender, tokenId);
-        _setTokenURI(tokenId, assetURI);
-        emit mintedNFT(msg.sender, _title, _description, tokenId, _assetURI);
+        _setTokenURI(tokenId, _assetURI);
+        emit MintedNft(
+            msg.sender,
+            _title, 
+            _description, 
+            tokenId, 
+            _assetURI, 
+            _intialPrice, 
+            _revenue, 
+            _expenses, 
+            _traffic, 
+            _productLink
+        );
         return tokenId;
     }
 
     function setBaseURI(string memory _baseURI) public {
         baseURI = _baseURI;
+    }
+
+    function setPriceDigitalAsset(uint256 _price, uint256 tokenId) public {
+        digitalAssets[tokenId].price = _price;
     }
 
     function safeTransfer(address from, address to, uint256 tokenId) public nonReentrant {
