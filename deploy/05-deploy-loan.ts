@@ -7,16 +7,16 @@ const deployBox: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const { deployments, getNamedAccounts, network } = hre;
   const { deploy, log, get } = deployments;
   const { deployer } = await getNamedAccounts();
-  log(`Deploying Box...`);
+  log(`Deploying Loan...`);
 
-  const box = await deploy("Box", {
+  const box = await deploy("Loan", {
     from : deployer,
     args: [],
     log: true
   });
 
   const timeLock = await ethers.getContract("TimeLock")
-  const boxContract = await ethers.getContractAt("Box", box.address)
+  const boxContract = await ethers.getContractAt("Loan", box.address)
 
   const boxTxn = await boxContract.tansferOwnership(timeLock.address)
   await boxTxn.wait(1)
