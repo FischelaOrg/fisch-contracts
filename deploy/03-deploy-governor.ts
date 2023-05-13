@@ -1,34 +1,40 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import {
-  quorumPercentage,
-  votingDelay,
-  votingPeriod,
+  VOTING_DELAY,
+  VOTING_PERIOD,
+  QUORUM_PERCENTAGE,
 } from "../util/deploy-helper";
+import { ethers } from "hardhat";
 
 const deployGovernor: DeployFunction = async (
   hre: HardhatRuntimeEnvironment
 ) => {
-  const { deployments, getNamedAccounts, network } = hre;
-  const { deploy, log, get } = deployments;
-  const { deployer } = await getNamedAccounts();
+    const { deployments, getNamedAccounts, network } = hre;
+    const { deploy, log, get } = deployments;
+    const { deployer } = await getNamedAccounts();
 
-  const governanceToken = await get("GovernanceToken");
-  const timeLock = await get("TimeLock");
+    const governanceToken = await get("GovernanceToken");
+    log(governanceToken.address, "HUSH GOVERNANCE");
 
-  const governor = await deploy("GovernanceCOntract", {
-    from: deployer,
-    args: [
-      governanceToken.address,
-      timeLock.address,
-      votingDelay,
-      votingPeriod,
-      quorumPercentage,
-    ],
-    log: true,
-  });
+    const timeLock = await get("TimeLock");
+    log(timeLock.address, "HUSH TIMELOCK");
 
-  console.log(`Deployed contract to ${governor.address}`);
+    const governor = await deploy("GovernorContract", {
+      from: deployer,
+      args: [
+        governanceToken.address,
+        timeLock.address,
+        VOTING_DELAY,
+        VOTING_PERIOD,
+        QUORUM_PERCENTAGE,
+      ],
+      log: false,
+      gasLimit: 10000000
+    });
+
+    log(`Deployed contract to ${governor.address}`);
+ 
 };
 
 export default deployGovernor;
