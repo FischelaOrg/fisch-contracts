@@ -6,7 +6,7 @@ import {
   FUNC,
   PROPOSAL_DESCRIPTION,
   NEW_STORE_VALUE,
-} from "../helper-hardhat-config"
+} from "../utils/helper-constants"
 import * as fs from "fs"
 import { moveBlocks } from "../utils/move-blocks"
 

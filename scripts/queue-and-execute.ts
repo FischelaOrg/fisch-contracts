@@ -5,7 +5,7 @@ import {
   PROPOSAL_DESCRIPTION,
   MIN_DELAY,
   developmentChains,
-} from "../helper-hardhat-config"
+} from "../utils/helper-constants"
 import { moveBlocks } from "../utils/move-blocks"
 import { moveTime } from "../utils/move-time"
 
