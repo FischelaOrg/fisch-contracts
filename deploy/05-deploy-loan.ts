@@ -27,9 +27,9 @@ const deployBox: DeployFunction = async function (
   ) {
     await verify(box.address, []);
   }
-  const boxContract = await ethers.getContractAt("Loan", box.address);
+  const loanContract = await ethers.getContractAt("Loan", box.address);
   const timeLock = await ethers.getContract("TimeLock");
-  const transferTx = await boxContract.transferOwnership(timeLock.address);
+  const transferTx = await loanContract.transferOwnership(timeLock.address);
   await transferTx.wait(1);
 };
 

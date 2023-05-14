@@ -8,8 +8,8 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Wrapper.sol";
 
 contract MyToken is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
   constructor(IERC20 wrappedToken)
-    ERC20("MyToken", "MTK")
-    ERC20Permit("MyToken")
+    ERC20("WrappedCowries", "WCOW")
+    ERC20Permit("WrappedCowries")
     ERC20Wrapper(wrappedToken)
   {}
 

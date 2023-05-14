@@ -9,17 +9,17 @@ import {
   VOTING_DELAY,
 } from "../utils/helper-constants";
 
-const deployGovernorContract: DeployFunction = async function (
+const deployVillageSquareContract: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment
 ) {
   // @ts-ignore
   const { getNamedAccounts, deployments, network } = hre;
   const { deploy, log, get } = deployments;
   const { deployer } = await getNamedAccounts();
-  const governanceToken = await get("GovernanceToken");
+  const cowriesToken = await get("CowriesToken");
   const timeLock = await get("TimeLock");
   const args = [
-    governanceToken.address,
+    cowriesToken.address,
     timeLock.address,
     QUORUM_PERCENTAGE,
     VOTING_PERIOD,
@@ -27,22 +27,22 @@ const deployGovernorContract: DeployFunction = async function (
   ];
 
   log("----------------------------------------------------");
-  log("Deploying GovernorContract and waiting for confirmations...");
-  const governorContract = await deploy("GovernorContract", {
+  log("Deploying VillageSquare and waiting for confirmations...");
+  const villageSquareContract = await deploy("VillageSquare", {
     from: deployer,
     args,
     log: true,
     // we need to wait if on a live network so we can verify properly
     waitConfirmations: networkConfig[network.name].blockConfirmations || 1,
   });
-  log(`GovernorContract at ${governorContract.address}`);
+  log(`Village Square at ${villageSquareContract.address}`);
   if (
     !developmentChains.includes(network.name) &&
     process.env.ETHERSCAN_API_KEY
   ) {
-    await verify(governorContract.address, args);
+    await verify(villageSquareContract.address, args);
   }
 };
 
-export default deployGovernorContract;
-deployGovernorContract.tags = ["all", "governor"];
+export default deployVillageSquareContract;
+deployVillageSquareContract.tags = ["all", "villagesquare"];

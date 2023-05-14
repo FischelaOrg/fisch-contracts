@@ -4,35 +4,35 @@ import verify from "../utils/helper-functions";
 import { networkConfig, developmentChains } from "../utils/helper-constants";
 import { ethers } from "hardhat"
 
-const deployGovernanceToken: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
+const deployCowriesToken: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // @ts-ignore
   const { getNamedAccounts, deployments, network } = hre
   const { deploy, log } = deployments
   const { deployer } = await getNamedAccounts()
   log("----------------------------------------------------")
-  log("Deploying GovernanceToken and waiting for confirmations...")
-  const governanceToken = await deploy("GovernanceToken", {
+  log("Deploying CowriesToken and waiting for confirmations...")
+  const cowriesToken = await deploy("CowriesToken", {
     from: deployer,
     args: [],
     log: true,
     // we need to wait if on a live network so we can verify properly
     waitConfirmations: networkConfig[network.name].blockConfirmations || 1,
   })
-  log(`GovernanceToken at ${governanceToken.address}`)
+  log(`CowriesToken at ${cowriesToken.address}`)
   if (!developmentChains.includes(network.name) && process.env.ETHERSCAN_API_KEY) {
-    await verify(governanceToken.address, [])
+    await verify(cowriesToken.address, [])
   }
   log(`Delegating to ${deployer}`)
-  await delegate(governanceToken.address, deployer)
+  await delegate(cowriesToken.address, deployer)
   log("Delegated!")
 }
 
-const delegate = async (governanceTokenAddress: string, delegatedAccount: string) => {
-  const governanceToken = await ethers.getContractAt("GovernanceToken", governanceTokenAddress)
-  const transactionResponse = await governanceToken.delegate(delegatedAccount)
+const delegate = async (cowriesTokenAddress: string, delegatedAccount: string) => {
+  const cowriesToken = await ethers.getContractAt("CowriesToken", cowriesTokenAddress)
+  const transactionResponse = await cowriesToken.delegate(delegatedAccount)
   await transactionResponse.wait(1)
-  console.log(`Checkpoints: ${await governanceToken.numCheckpoints(delegatedAccount)}`)
+  console.log(`Checkpoints: ${await cowriesToken.numCheckpoints(delegatedAccount)}`)
 }
 
-export default deployGovernanceToken
-deployGovernanceToken.tags = ["all", "governor"]
+export default deployCowriesToken
+deployCowriesToken.tags = ["all", "villagesquare"]
