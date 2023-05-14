@@ -1,26 +1,37 @@
-import { ethers } from "hardhat";
-import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { ADDRESS_ZERO } from "../util/deploy-helper";
+import { DeployFunction } from "hardhat-deploy/types";
+import verify from "../utils/helper-functions";
+import { networkConfig, developmentChains } from "../utils/helper-constants";
+import { ethers } from "hardhat";
 
-const deployBox: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
-  const { deployments, getNamedAccounts, network } = hre;
-  const { deploy, log, get } = deployments;
+const deployBox: DeployFunction = async function (
+  hre: HardhatRuntimeEnvironment
+) {
+  // @ts-ignore
+  const { getNamedAccounts, deployments, network } = hre;
+  const { deploy, log } = deployments;
   const { deployer } = await getNamedAccounts();
-  log(`Deploying Loan...`);
-
+  log("----------------------------------------------------");
+  log("Deploying Box and waiting for confirmations...");
   const box = await deploy("Loan", {
-    from : deployer,
+    from: deployer,
     args: [],
-    log: true
+    log: true,
+    // we need to wait if on a live network so we can verify properly
+    waitConfirmations: networkConfig[network.name].blockConfirmations || 1,
   });
-
-  const timeLock = await ethers.getContract("TimeLock")
-  const boxContract = await ethers.getContractAt("Loan", box.address)
-
-  const boxTxn = await boxContract.tansferOwnership(timeLock.address)
-  await boxTxn.wait(1)
-
-  log("Ownership Transfered!")
-
+  log(`Loan at ${box.address}`);
+  if (
+    !developmentChains.includes(network.name) &&
+    process.env.ETHERSCAN_API_KEY
+  ) {
+    await verify(box.address, []);
+  }
+  const boxContract = await ethers.getContractAt("Loan", box.address);
+  const timeLock = await ethers.getContract("TimeLock");
+  const transferTx = await boxContract.transferOwnership(timeLock.address);
+  await transferTx.wait(1);
 };
+
+export default deployBox;
+deployBox.tags = ["all", "loan"];

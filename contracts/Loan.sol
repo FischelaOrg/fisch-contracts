@@ -3,7 +3,7 @@ pragma solidity ^0.8.8;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Box is Ownable {
+contract Loan is Ownable {
     uint256 private value;
 
     event ValueChanged(uint256 newValue);
