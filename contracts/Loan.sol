@@ -35,6 +35,8 @@ contract Loan is Ownable {
         uint256 borrowerId;
         address borrower;
         uint256 borrowAmount;
+        uint256 repayAmount;
+        uint256 amountAlreadyRemitted;
         uint256 repaymentCapacity;
         uint256 deadline;
         uint256 interest;
@@ -88,7 +90,11 @@ contract Loan is Ownable {
     // first create a function to borrow all
     // Borrow
 
-    function borrow(uint256 _loanId, uint256 _amount, uint256 _nftCollateralId) public {
+    function borrow(
+        uint256 _loanId,
+        uint256 _amount,
+        uint256 _nftCollateralId
+    ) public {
         // create Loan
         _borrowersIds.increment();
 
@@ -97,6 +103,8 @@ contract Loan is Ownable {
             borrowerId: 0,
             borrower: 0,
             borrowAmount: 0,
+            repayAmount: 0,
+            amountAlreadyRemitted: 0,
             repaymentCapacity: 0,
             deadline: 0,
             interest: 0,
