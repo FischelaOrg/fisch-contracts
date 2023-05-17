@@ -2,14 +2,18 @@
 pragma solidity ^0.8.8;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 
 contract Loan is Ownable {
     // default loan duration
     uint256 private _defaultLoanDuration = 12 weeks;
     uint256 public defaultInterestRate = 5;
+    using Counters for Counters.Counter;
+    Counters.Counter private _borrowersIds;
+    Counters.Counter private _lendersIds;
 
     // create a struct for Lenders
-    struct Lender{
+    struct Lender {
         uint256 loanId;
         uint256 innitialBorrowAmount;
         uint256 currentBorrowAmount;
@@ -20,19 +24,14 @@ contract Loan is Ownable {
         bool locked;
         bool isActive;
         address lender;
-
     }
 
-    event LoanCreated(
+    event LoanCreated(uint256 loanId);
 
-    );
-
-    event LoanBorrowed(
-
-    );
+    event LoanBorrowed(uint256 borrowId);
 
     // create a struct for borowers
-    struct Borrower{
+    struct Borrower {
         uint256 borrowerId;
         address borrower;
         uint256 borrowAmount;
@@ -40,52 +39,83 @@ contract Loan is Ownable {
         uint256 deadline;
         uint256 interest;
         uint256 lenderId;
-        uint256 nftCollateralId
-
+        uint256 nftCollateralId;
     }
 
     // create a list of lenders
 
-    Lender[] private _lenders;
+    mapping(uint256 => Lender) private _lenders;
 
     // create a list of borrrowers
 
-    Borrower[] private _borrowers;
+    mapping(uint256 => Borrower) private _borrowers;
 
     // createLoan
-    function createLoan(uint256 innitialBorrowAmount, uint256 interestRate, uint256 loanOutDuration) public payable{
+    function createOrListLoan(
+        uint256 _innitialBorrowAmount,
+        uint256 _interestRate,
+        uint256 _loanOutDuration
+    ) public payable {
         // create Loan
+        _lendersIds.increment();
+
+        uint256 currentCounter = _lendersIds.current();
+        _lenders[currentCounter] = Lender({
+            loanId: currentCounter,
+            currentBorrowAmount: _innitialBorrowAmount,
+            amountRepaid: 0,
+            locked: true,
+            isActive: false,
+            lender: msg.sender,
+            innitialBorrowAmount: _innitialBorrowAmount,
+            interestRate: _interestRate,
+            loanOutDuration: _loanOutDuration,
+            borrowerId: 0
+        });
+
+        emit LoanCreated(_lenders[currentCounter].loanId);
     }
 
     // calculate simple interest
-    function calculateLoanInterest() public {
-
+    function calculateLoanInterest(
+        uint256 pricipalAmount,
+        uint256 interestRate,
+        uint256 duration
+    ) public view returns (uint256 si) {
+        return si = (pricipalAmount * interestRate * duration) / 100;
     }
 
     // first create a function to borrow all
     // Borrow
 
-    function borrow() public {
+    function borrow(uint256 _loanId, uint256 _amount, uint256 _nftCollateralId) public {
+        // create Loan
+        _borrowersIds.increment();
 
+        uint256 currentCounter = _borrowersIds.current();
+        _borrowers[currentCounter] = Borrower({
+            borrowerId: 0,
+            borrower: 0,
+            borrowAmount: 0,
+            repaymentCapacity: 0,
+            deadline: 0,
+            interest: 0,
+            lenderId: 0,
+            nftCollateralId: 0
+        });
+
+        emit LoanBorrowed(_lenders[currentCounter].loanId);
     }
 
     // repayLoan ---- monthly repayment of loans
-    function repayLoan() public {
-
-    }
+    function repayLoan() public {}
 
     // liquidateCollateral
-    function liquidateCollateral() public {
-
-    }
+    function liquidateCollateral() public {}
 
     // approveLoan
-    function approveLoan() public {
-
-    }
+    function approveLoan() public {}
 
     // cancelLoan
-    function cancelLoan() public {
-
-    }
+    function cancelLoan() public {}
 }
