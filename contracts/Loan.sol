@@ -8,10 +8,13 @@ import "./Fisch.sol";
 
 contract Loan is Ownable, ReentrancyGuard {
     // default loan duration
-    uint256 private _defaultLoanDuration = 12 weeks;
+    uint256 private _defaultLoanDuration = 12;
     uint256 public defaultInterestRate = 5;
-    bytes32 public constant PUBLIC_SALE = keccak256("PUBLIC_SALE");
-    bytes32 public constant PRIVATE_SALE = keccak256("PRIVATE_SALE");
+    bytes32 public constant PUBLIC_SALE =
+        keccak256(abi.encodePacked("PUBLIC_SALE"));
+    bytes32 public constant PRIVATE_SALE =
+        keccak256(abi.encodePacked("PRIVATE_SALE"));
+
     using Counters for Counters.Counter;
     Counters.Counter private _borrowersIds;
     Counters.Counter private _lendersIds;
@@ -25,7 +28,7 @@ contract Loan is Ownable, ReentrancyGuard {
     struct Lender {
         uint256 loanId;
         uint256 innitialLendAmount;
-        uint256 currentLendAmount;
+        uint256 currentAvailableLendAmount;
         uint256 amountRepaid;
         uint256 borrowerId;
         uint256 interestRate; // using compound interest SI = PRT/100 to calculate interest rate
@@ -33,6 +36,7 @@ contract Loan is Ownable, ReentrancyGuard {
         bool locked;
         bool isActive;
         address lender;
+        uint256 loanDurationInMonthCount;
     }
 
     // create a struct for borowers
@@ -48,16 +52,12 @@ contract Loan is Ownable, ReentrancyGuard {
         uint256 nftCollateralTokenId;
         address receiverAddress;
         bool isApproved;
-        bool isRepayed;
+        bool isRepaid;
     }
 
     // events
 
-    event LoanCreated(
-        uint256 amount,
-        uint256 lenderId,
-        address lender
-    );
+    event LoanCreated(uint256 amount, uint256 lenderId, address lender);
 
     event LoanBorrowed(
         uint256 borrowId,
@@ -97,11 +97,20 @@ contract Loan is Ownable, ReentrancyGuard {
         bool isActive
     );
 
+    event FundsAdded(
+        uint256 currentAvailableLendAmount,
+        uint256 innitialLendAmount,
+        address lender,
+        uint256 loanId
+    );
+    event LoanDeactivated(uint256 loanId, bool isActive, bool locked);
+
     // errors
 
     error SenderNotReceiver(address sender, address receiver);
     error LoanNotActive();
     error TransferFailed();
+    error LoanIsLocked();
 
     // modifiers
     modifier onlyLender(address _lender) {
@@ -119,9 +128,9 @@ contract Loan is Ownable, ReentrancyGuard {
 
     // createLoan
     function createOrListLoan(
-        uint256 _innitialLendAmount,
         uint256 _interestRate,
-        uint256 _loanOutDuration
+        uint256 _loanOutDuration,
+        uint256 _loanDurationMonthCount
     ) public payable {
         // create Loan
         _lendersIds.increment();
@@ -129,27 +138,48 @@ contract Loan is Ownable, ReentrancyGuard {
         uint256 currentCounter = _lendersIds.current();
         _lenders[currentCounter] = Lender({
             loanId: currentCounter,
-            currentLendAmount: _innitialLendAmount,
+            currentAvailableLendAmount: msg.value,
             amountRepaid: 0,
             locked: false,
             isActive: true,
             lender: msg.sender,
-            innitialLendAmount: _innitialLendAmount,
+            innitialLendAmount: msg.value,
             interestRate: _interestRate,
             loanOutDuration: _loanOutDuration,
-            borrowerId: 0
+            borrowerId: 0,
+            loanDurationInMonthCount: _loanDurationMonthCount != 0
+                ? _loanDurationMonthCount
+                : _defaultLoanDuration
         });
 
-        emit LoanCreated( _lenders[currentCounter].innitialLendAmount, currentCounter, _lenders[currentCounter].lender);
+        emit LoanCreated(
+            _lenders[currentCounter].innitialLendAmount,
+            currentCounter,
+            _lenders[currentCounter].lender
+        );
     }
 
     // calculate simple interest
     function calculateLoanInterest(
         uint256 pricipalAmount,
         uint256 interestRate,
-        uint256 duration
+        uint256 durationMonths
     ) public pure returns (uint256 si) {
-        return si = (pricipalAmount * interestRate * duration) / 100;
+        return
+            si = (pricipalAmount * interestRate * durationMonths) / (100 * 12);
+    }
+
+    // convert months to weeks
+    function convertMonthsToWeeks(
+        uint256 _noOfMonth
+    ) public pure returns (uint256 noOfweeks) {
+        return noOfweeks = 4 * _noOfMonth;
+    }
+
+    function convertWeeksToSeconds(
+        uint256 noOfWeeks
+    ) public pure returns (uint256 secondsByWeeks) {
+        return secondsByWeeks = noOfWeeks * 1 weeks;
     }
 
     // first create a function to borrow all
@@ -169,6 +199,19 @@ contract Loan is Ownable, ReentrancyGuard {
         if (!_lenders[_lenderId].isActive) {
             revert LoanNotActive();
         }
+
+        if (!_lenders[_lenderId].locked) {
+            revert LoanIsLocked();
+        }
+
+        // calculate amount to be repayed
+        uint256 conclusiveBorrowAmount = _borrowAmount +
+            calculateLoanInterest(
+                _borrowAmount,
+                _lenders[_lenderId].interestRate,
+                _lenders[_lenderId].loanDurationInMonthCount
+            );
+
         // create Loan
         _borrowersIds.increment();
         uint256 currentCounter = _borrowersIds.current();
@@ -176,7 +219,7 @@ contract Loan is Ownable, ReentrancyGuard {
             borrowerId: currentCounter,
             borrower: msg.sender,
             currentBorrowAmount: 0,
-            innitialBorrowAmount: _borrowAmount,
+            innitialBorrowAmount: conclusiveBorrowAmount,
             amountAlreadyRemitted: 0,
             deadline: 0,
             interest: 0,
@@ -184,7 +227,7 @@ contract Loan is Ownable, ReentrancyGuard {
             nftCollateralTokenId: _nftCollateralTokenId,
             receiverAddress: msg.sender,
             isApproved: false,
-            isRepayed: false
+            isRepaid: false
         });
 
         emit LoanBorrowed(
@@ -208,16 +251,26 @@ contract Loan is Ownable, ReentrancyGuard {
             revert SenderNotReceiver(borrower.receiverAddress, msg.sender);
         }
 
+        if (
+            nftCollateral.ownerOf(borrower.nftCollateralTokenId) != msg.sender
+        ) {
+            revert("Sender not NFT owner");
+        }
+
         // freeze NFT
         nftCollateral.freeze(borrower.nftCollateralTokenId);
 
         Lender storage lender = _lenders[borrower.lenderId];
 
         // deduct loan amount from lender
-        lender.currentLendAmount -= borrower.innitialBorrowAmount;
+        lender.currentAvailableLendAmount -= borrower.innitialBorrowAmount;
 
         // set loan deadline
-        borrower.deadline = block.timestamp + lender.loanOutDuration;
+        borrower.deadline =
+            block.timestamp +
+            convertWeeksToSeconds(
+                convertMonthsToWeeks(lender.loanDurationInMonthCount)
+            );
 
         // add loan amount to borrower
         borrower.currentBorrowAmount += borrower.innitialBorrowAmount;
@@ -251,17 +304,17 @@ contract Loan is Ownable, ReentrancyGuard {
         Borrower storage borrower = _borrowers[_borrowerId];
         Lender storage lender = _lenders[borrower.lenderId];
 
-        if (borrower.amountAlreadyRemitted >= borrower.innitialBorrowAmount) {
-            borrower.isRepayed = true;
-        }
-
         // transfer amount to lender
-        lender.currentLendAmount -= msg.value;
+        lender.currentAvailableLendAmount += msg.value;
         lender.amountRepaid += msg.value;
 
         // exonerate borrower
         borrower.amountAlreadyRemitted += msg.value;
         borrower.currentBorrowAmount -= msg.value;
+
+        if (borrower.amountAlreadyRemitted >= borrower.innitialBorrowAmount) {
+            borrower.isRepaid = true;
+        }
 
         nftCollateral.unfreeze(borrower.nftCollateralTokenId);
         emit LoanRepayed(
@@ -281,14 +334,16 @@ contract Loan is Ownable, ReentrancyGuard {
      */
     function liquidateCollateral(
         uint256 _borrowerId,
-        bytes memory  _saleType
+        bytes memory _saleType
     ) public payable onlyOwner {
         // check that loan is overdue
         bytes32 theSaleType;
-        assembly{
+
+        assembly {
             theSaleType := mload(add(_saleType, 32))
         }
-        bytes32  practicalSaleType = keccak256(abi.encode(theSaleType));
+
+        bytes32 practicalSaleType = keccak256(abi.encode(theSaleType));
 
         // if liquidation sale type is public
         if (practicalSaleType == PUBLIC_SALE) {
@@ -338,7 +393,7 @@ contract Loan is Ownable, ReentrancyGuard {
             _nftCollateralTokenId
         );
         // repay lender
-        lender.currentLendAmount += msg.value; //available lend amount
+        lender.currentAvailableLendAmount += msg.value; //available lend amount
         lender.amountRepaid += msg.value;
 
         // exonerate borrower
@@ -359,6 +414,51 @@ contract Loan is Ownable, ReentrancyGuard {
         );
     }
 
+    // update loan duration
+
+    // add more funds
+    function addfunds(
+        uint256 _loanId
+    ) public payable onlyLender(_lenders[_loanId].lender) {
+        Lender storage lender = _lenders[_loanId];
+        lender.currentAvailableLendAmount += msg.value;
+        lender.innitialLendAmount += msg.value;
+
+        emit FundsAdded(
+            lender.currentAvailableLendAmount,
+            lender.innitialLendAmount,
+            _lenders[_loanId].lender,
+            _loanId
+        );
+    }
+
+    // deactivate loan
+
+    function deActivateLoan(
+        uint256 _loanId
+    ) public payable onlyLender(_lenders[_loanId].lender) {
+        _lenders[_loanId].isActive = false;
+        _lenders[_loanId].locked = false;
+        emit LoanDeactivated(
+            _loanId,
+            _lenders[_loanId].isActive,
+            _lenders[_loanId].locked
+        );
+    }
+
+    // fetch loan single
+    function fetchLoanSingle(
+        uint256 _loanId
+    ) public view returns (Lender memory) {
+        return _lenders[_loanId];
+    }
+
+    // fetch borrow single
+function fetchBorrowSingle(
+        uint256 _borrowId
+    ) public view returns (Borrower memory) {
+        return _borrowers[_borrowId];
+    }
     receive() external payable {}
 
     fallback() external payable {}
