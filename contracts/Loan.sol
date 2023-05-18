@@ -3,10 +3,10 @@ pragma solidity ^0.8.8;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./Fisch.sol";
 
-contract Loan is Ownable {
+contract Loan is Ownable, ReentrancyGuard {
     // default loan duration
     uint256 private _defaultLoanDuration = 12 weeks;
     uint256 public defaultInterestRate = 5;
@@ -22,8 +22,8 @@ contract Loan is Ownable {
     // create a struct for Lenders
     struct Lender {
         uint256 loanId;
-        uint256 innitialBorrowAmount;
-        uint256 currentBorrowAmount;
+        uint256 innitialLendAmount;
+        uint256 currentLendAmount;
         uint256 amountRepaid;
         uint256 borrowerId;
         uint256 interestRate; // using compound interest SI = PRT/100 to calculate interest rate
@@ -41,19 +41,21 @@ contract Loan is Ownable {
 
     error SenderNotReceiver(address sender, address receiver);
     error LoanNotActive();
+    error TransferFailed();
     // create a struct for borowers
     struct Borrower {
         uint256 borrowerId;
         address borrower;
-        uint256 borrowAmount;
-        uint256 repayAmount;
+        uint256 innitialBorrowAmount;
+        uint256 currentBorrowAmount;
         uint256 amountAlreadyRemitted;
         uint256 deadline;
         uint256 interest;
         uint256 lenderId;
-        uint256 nftCollateralId;
+        uint256 nftCollateralTokenId;
         address receiverAddress;
         bool isApproved;
+        bool isRepayed;
     }
 
     // create a list of lenders
@@ -66,7 +68,7 @@ contract Loan is Ownable {
 
     // createLoan
     function createOrListLoan(
-        uint256 _innitialBorrowAmount,
+        uint256 _innitialLendAmount,
         uint256 _interestRate,
         uint256 _loanOutDuration
     ) public payable {
@@ -76,12 +78,12 @@ contract Loan is Ownable {
         uint256 currentCounter = _lendersIds.current();
         _lenders[currentCounter] = Lender({
             loanId: currentCounter,
-            currentBorrowAmount: _innitialBorrowAmount,
+            currentLendAmount: _innitialLendAmount,
             amountRepaid: 0,
             locked: true,
             isActive: false,
             lender: msg.sender,
-            innitialBorrowAmount: _innitialBorrowAmount,
+            innitialLendAmount: _innitialLendAmount,
             interestRate: _interestRate,
             loanOutDuration: _loanOutDuration,
             borrowerId: 0
@@ -105,7 +107,7 @@ contract Loan is Ownable {
     function borrow(
         uint256 _lenderId,
         uint256 _borrowAmount,
-        uint256 _nftCollateralId,
+        uint256 _nftCollateralTokenId,
         address receiverAddress
     ) public {
         // check if receiver address equals msg.sender
@@ -118,39 +120,98 @@ contract Loan is Ownable {
         }
         // create Loan
         _borrowersIds.increment();
-
         uint256 currentCounter = _borrowersIds.current();
         _borrowers[currentCounter] = Borrower({
             borrowerId: currentCounter,
             borrower: msg.sender,
-            borrowAmount: _borrowAmount,
-            repayAmount: 0,
+            currentBorrowAmount: 0,
+            innitialBorrowAmount: _borrowAmount,
             amountAlreadyRemitted: 0,
             deadline: 0,
             interest: 0,
             lenderId: _lenderId,
-            nftCollateralId: _nftCollateralId,
+            nftCollateralTokenId: _nftCollateralTokenId,
             receiverAddress: msg.sender,
-            isApproved: false
+            isApproved: false,
+            isRepayed: false
         });
 
         emit LoanBorrowed(_lenders[currentCounter].loanId);
     }
 
-     // approveLoan
-    function approveLoan(uint256 _borrowerId) public {
+    // approveLoan
+    /*
+        - approve loan verifies receiver
+        - freezes nft collateral
+        - transfers loan to borrower
+     */
+    function approveLoan(uint256 _borrowerId) public onlyOwner nonReentrant {
         Borrower storage borrower = _borrowers[_borrowerId];
-        if (borrower.receiverAddress != msg.sender){
+        if (borrower.receiverAddress != msg.sender) {
             revert SenderNotReceiver(borrower.receiverAddress, msg.sender);
+        }
+
+        // freeze NFT
+        nftCollateral.freeze(borrower.nftCollateralTokenId);
+
+        Lender storage lender = _lenders[borrower.lenderId];
+
+        // deduct loan amount from lender
+        lender.currentLendAmount -= borrower.innitialBorrowAmount;
+
+        // set loan deadline
+        borrower.deadline = block.timestamp + lender.loanOutDuration;
+
+        // add loan amount to borrower
+        borrower.currentBorrowAmount += borrower.innitialBorrowAmount;
+
+        // transfer loan to msgSender
+        (bool success, ) = msg.sender.call{
+            value: borrower.innitialBorrowAmount
+        }("");
+
+        if (!success) {
+            revert TransferFailed();
         }
     }
 
     // repayLoan ---- monthly repayment of loans
-    function repayLoan() public {}
+    /*
+     * Repay loan
+     * checks if current amount repays all the loan
+     * transfers amount to lender
+     * exonerates borrower
+     */
+    function repayLoan(uint256 _borrowerId) public payable nonReentrant {
+        // check if current msg.value repays loan
+        Borrower storage borrower = _borrowers[_borrowerId];
+        Lender storage lender = _lenders[borrower.lenderId];
+
+        if (borrower.amountAlreadyRemitted >= borrower.innitialBorrowAmount) {
+            borrower.isRepayed = true;
+        }
+
+        // transfer amount to lender
+        lender.currentLendAmount -= msg.value;
+        lender.amountRepaid += msg.value;
+
+        // exonerate borrower
+        borrower.amountAlreadyRemitted += msg.value;
+        borrower.currentBorrowAmount -= msg.value;
+
+        nftCollateral.unfreeze(borrower.nftCollateralTokenId);
+    }
 
     // liquidateCollateral
-    function liquidateCollateral() public {}
+    /*
+        * Liquidate collateral 
+    */
+    function liquidateCollateral(uint256 _borrowerId) public {}
 
     // cancelLoan
     function cancelLoan() public {}
+
+    receive() external payable {}
+
+    fallback() external payable {}
 }
