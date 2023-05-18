@@ -42,6 +42,12 @@ contract Loan is Ownable, ReentrancyGuard {
     error SenderNotReceiver(address sender, address receiver);
     error LoanNotActive();
     error TransferFailed();
+
+    // modifiers
+    modifier onlyLender(address _lender){
+        require(msg.sender == _lender, "Sender not Lender");
+        _;
+    }
     // create a struct for borowers
     struct Borrower {
         uint256 borrowerId;
@@ -80,8 +86,8 @@ contract Loan is Ownable, ReentrancyGuard {
             loanId: currentCounter,
             currentLendAmount: _innitialLendAmount,
             amountRepaid: 0,
-            locked: true,
-            isActive: false,
+            locked: false,
+            isActive: true,
             lender: msg.sender,
             innitialLendAmount: _innitialLendAmount,
             interestRate: _interestRate,
@@ -209,7 +215,9 @@ contract Loan is Ownable, ReentrancyGuard {
     function liquidateCollateral(uint256 _borrowerId) public {}
 
     // cancelLoan
-    function cancelLoan() public {}
+    function cancelLoan(uint256 _lenderId) public onlyLender(_lenders[_lenderId].lender){
+        _lenders[_lenderId].isActive = false;
+    }
 
     receive() external payable {}
 
