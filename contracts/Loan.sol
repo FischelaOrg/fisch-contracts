@@ -4,6 +4,8 @@ pragma solidity ^0.8.8;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
+import "./Fisch.sol";
+
 contract Loan is Ownable {
     // default loan duration
     uint256 private _defaultLoanDuration = 12 weeks;
@@ -11,6 +13,11 @@ contract Loan is Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _borrowersIds;
     Counters.Counter private _lendersIds;
+    Fisch public nftCollateral;
+
+    constructor(Fisch _nftCollateralAddress) {
+        nftCollateral = _nftCollateralAddress;
+    }
 
     // create a struct for Lenders
     struct Lender {
@@ -30,6 +37,10 @@ contract Loan is Ownable {
 
     event LoanBorrowed(uint256 borrowId);
 
+    // errors
+
+    error SenderNotReceiver(address sender, address receiver);
+    error LoanNotActive();
     // create a struct for borowers
     struct Borrower {
         uint256 borrowerId;
@@ -37,11 +48,12 @@ contract Loan is Ownable {
         uint256 borrowAmount;
         uint256 repayAmount;
         uint256 amountAlreadyRemitted;
-        uint256 repaymentCapacity;
         uint256 deadline;
         uint256 interest;
         uint256 lenderId;
         uint256 nftCollateralId;
+        address receiverAddress;
+        bool isApproved;
     }
 
     // create a list of lenders
@@ -83,7 +95,7 @@ contract Loan is Ownable {
         uint256 pricipalAmount,
         uint256 interestRate,
         uint256 duration
-    ) public view returns (uint256 si) {
+    ) public pure returns (uint256 si) {
         return si = (pricipalAmount * interestRate * duration) / 100;
     }
 
@@ -91,28 +103,46 @@ contract Loan is Ownable {
     // Borrow
 
     function borrow(
-        uint256 _loanId,
-        uint256 _amount,
-        uint256 _nftCollateralId
+        uint256 _lenderId,
+        uint256 _borrowAmount,
+        uint256 _nftCollateralId,
+        address receiverAddress
     ) public {
+        // check if receiver address equals msg.sender
+        if (receiverAddress != msg.sender) {
+            revert SenderNotReceiver(msg.sender, receiverAddress);
+        }
+
+        if (!_lenders[_lenderId].isActive) {
+            revert LoanNotActive();
+        }
         // create Loan
         _borrowersIds.increment();
 
         uint256 currentCounter = _borrowersIds.current();
         _borrowers[currentCounter] = Borrower({
-            borrowerId: 0,
-            borrower: 0,
-            borrowAmount: 0,
+            borrowerId: currentCounter,
+            borrower: msg.sender,
+            borrowAmount: _borrowAmount,
             repayAmount: 0,
             amountAlreadyRemitted: 0,
-            repaymentCapacity: 0,
             deadline: 0,
             interest: 0,
-            lenderId: 0,
-            nftCollateralId: 0
+            lenderId: _lenderId,
+            nftCollateralId: _nftCollateralId,
+            receiverAddress: msg.sender,
+            isApproved: false
         });
 
         emit LoanBorrowed(_lenders[currentCounter].loanId);
+    }
+
+     // approveLoan
+    function approveLoan(uint256 _borrowerId) public {
+        Borrower storage borrower = _borrowers[_borrowerId];
+        if (borrower.receiverAddress != msg.sender){
+            revert SenderNotReceiver(borrower.receiverAddress, msg.sender);
+        }
     }
 
     // repayLoan ---- monthly repayment of loans
@@ -120,9 +150,6 @@ contract Loan is Ownable {
 
     // liquidateCollateral
     function liquidateCollateral() public {}
-
-    // approveLoan
-    function approveLoan() public {}
 
     // cancelLoan
     function cancelLoan() public {}
