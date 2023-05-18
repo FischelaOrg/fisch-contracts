@@ -10,6 +10,8 @@ contract Loan is Ownable, ReentrancyGuard {
     // default loan duration
     uint256 private _defaultLoanDuration = 12 weeks;
     uint256 public defaultInterestRate = 5;
+    bytes32 public constant PUBLIC_SALE = keccak256("PUBLIC_SALE");
+    bytes32 public constant PRIVATE_SALE = keccak256("PRIVATE_SALE");
     using Counters for Counters.Counter;
     Counters.Counter private _borrowersIds;
     Counters.Counter private _lendersIds;
@@ -33,21 +35,6 @@ contract Loan is Ownable, ReentrancyGuard {
         address lender;
     }
 
-    event LoanCreated(uint256 loanId);
-
-    event LoanBorrowed(uint256 borrowId);
-
-    // errors
-
-    error SenderNotReceiver(address sender, address receiver);
-    error LoanNotActive();
-    error TransferFailed();
-
-    // modifiers
-    modifier onlyLender(address _lender){
-        require(msg.sender == _lender, "Sender not Lender");
-        _;
-    }
     // create a struct for borowers
     struct Borrower {
         uint256 borrowerId;
@@ -62,6 +49,64 @@ contract Loan is Ownable, ReentrancyGuard {
         address receiverAddress;
         bool isApproved;
         bool isRepayed;
+    }
+
+    // events
+
+    event LoanCreated(
+        uint256 amount,
+        uint256 lenderId,
+        address lender
+    );
+
+    event LoanBorrowed(
+        uint256 borrowId,
+        uint256 amount,
+        uint256 lenderId,
+        address lender,
+        address borrower
+    );
+
+    event LoanApproved(
+        uint256 lenderId,
+        uint256 borrowerId,
+        address lender,
+        address borrower,
+        uint256 amount
+    );
+    event LoanRepayed(
+        uint256 lenderId,
+        uint256 borrowerId,
+        address lender,
+        address borrower,
+        uint256 amount
+    );
+    event CollateralLiquidated(
+        uint256 lenderId,
+        uint256 borrowerId,
+        address lender,
+        address borrower,
+        uint256 amount,
+        address liquidator
+    );
+
+    event LoanCancelled(
+        uint256 lenderId,
+        address lender,
+        uint256 amount,
+        bool isActive
+    );
+
+    // errors
+
+    error SenderNotReceiver(address sender, address receiver);
+    error LoanNotActive();
+    error TransferFailed();
+
+    // modifiers
+    modifier onlyLender(address _lender) {
+        require(msg.sender == _lender, "Sender not Lender");
+        _;
     }
 
     // create a list of lenders
@@ -95,7 +140,7 @@ contract Loan is Ownable, ReentrancyGuard {
             borrowerId: 0
         });
 
-        emit LoanCreated(_lenders[currentCounter].loanId);
+        emit LoanCreated( _lenders[currentCounter].innitialLendAmount, currentCounter, _lenders[currentCounter].lender);
     }
 
     // calculate simple interest
@@ -142,7 +187,13 @@ contract Loan is Ownable, ReentrancyGuard {
             isRepayed: false
         });
 
-        emit LoanBorrowed(_lenders[currentCounter].loanId);
+        emit LoanBorrowed(
+            _lenders[currentCounter].loanId,
+            _borrowers[currentCounter].innitialBorrowAmount,
+            _lenderId,
+            _lenders[_lenderId].lender,
+            _borrowers[currentCounter].borrower
+        );
     }
 
     // approveLoan
@@ -179,6 +230,13 @@ contract Loan is Ownable, ReentrancyGuard {
         if (!success) {
             revert TransferFailed();
         }
+        emit LoanApproved(
+            borrower.lenderId,
+            _borrowerId,
+            lender.lender,
+            borrower.borrower,
+            borrower.innitialBorrowAmount
+        );
     }
 
     // repayLoan ---- monthly repayment of loans
@@ -206,17 +264,99 @@ contract Loan is Ownable, ReentrancyGuard {
         borrower.currentBorrowAmount -= msg.value;
 
         nftCollateral.unfreeze(borrower.nftCollateralTokenId);
+        emit LoanRepayed(
+            borrower.lenderId,
+            borrower.borrowerId,
+            lender.lender,
+            borrower.borrower,
+            msg.value
+        );
     }
 
     // liquidateCollateral
     /*
-        * Liquidate collateral 
-    */
-    function liquidateCollateral(uint256 _borrowerId) public {}
+     * Liquidate collateral
+     * puts nft on sale on the martkeplace
+     *
+     */
+    function liquidateCollateral(
+        uint256 _borrowerId,
+        bytes memory  _saleType
+    ) public payable onlyOwner {
+        // check that loan is overdue
+        bytes32 theSaleType;
+        assembly{
+            theSaleType := mload(add(_saleType, 32))
+        }
+        bytes32  practicalSaleType = keccak256(abi.encode(theSaleType));
+
+        // if liquidation sale type is public
+        if (practicalSaleType == PUBLIC_SALE) {
+            // implement listing asset on the marketplace
+            return;
+        }
+
+        // implement private sale
+        _liquidateInPrivateSale(
+            _borrowers[_borrowerId].nftCollateralTokenId,
+            _borrowerId,
+            _borrowers[_borrowerId].lenderId
+        );
+
+        emit CollateralLiquidated(
+            _borrowers[_borrowerId].lenderId,
+            _borrowerId,
+            _lenders[_borrowers[_borrowerId].lenderId].lender,
+            _borrowers[_borrowerId].borrower,
+            _borrowers[_borrowerId].innitialBorrowAmount,
+            msg.sender
+        );
+    }
+
+    // Liquidate private sale
+    /*
+     * unfreeze nft Collateral
+     * transfer nft value to liquidator
+     * repay lender
+     * exonerate borrower
+     */
+    function _liquidateInPrivateSale(
+        uint256 _nftCollateralTokenId,
+        uint256 _borrowerId,
+        uint256 _lenderId
+    ) private {
+        // unfreeze nft Collateral
+        nftCollateral.unfreeze(_nftCollateralTokenId);
+
+        Borrower storage borrower = _borrowers[_borrowerId];
+        Lender storage lender = _lenders[_lenderId];
+
+        // transfer nft value to liquidator
+        nftCollateral.safeTransferFrom(
+            borrower.borrower,
+            msg.sender,
+            _nftCollateralTokenId
+        );
+        // repay lender
+        lender.currentLendAmount += msg.value; //available lend amount
+        lender.amountRepaid += msg.value;
+
+        // exonerate borrower
+        borrower.currentBorrowAmount -= msg.value;
+        borrower.amountAlreadyRemitted += msg.value;
+    }
 
     // cancelLoan
-    function cancelLoan(uint256 _lenderId) public onlyLender(_lenders[_lenderId].lender){
+    function cancelLoan(
+        uint256 _lenderId
+    ) public onlyLender(_lenders[_lenderId].lender) {
         _lenders[_lenderId].isActive = false;
+        emit LoanCancelled(
+            _lenderId,
+            _lenders[_lenderId].lender,
+            _lenders[_lenderId].innitialLendAmount,
+            _lenders[_lenderId].isActive
+        );
     }
 
     receive() external payable {}
