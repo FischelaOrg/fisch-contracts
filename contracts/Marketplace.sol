@@ -23,6 +23,8 @@ contract Marketplace is ReentrancyGuard {
     event PlacedBid(uint256 bidAmount, address bidder, uint256 bidTime, uint256 auctionId, uint256 tokenId);
     event AuctionCancelled(uint256 auctionId, uint256 tokenId, address seller);
     event AuctionEnded(uint256 auctionId, address winner, uint256 settledPrice);
+    event AmountSent(address indexed to, uint256 indexed amount);
+    event AmountReceived(address sender, uint256 amount);
 
     uint256 minimumBid = 1e18;
 
@@ -41,6 +43,7 @@ contract Marketplace is ReentrancyGuard {
     struct HighestBidder {
         address bidder;
         uint256 bid;
+        uint256 bidTime;
     }
     mapping(uint256 => HighestBidder) public highestBids;
 
@@ -48,6 +51,12 @@ contract Marketplace is ReentrancyGuard {
     constructor(address _assetNft) {
         assetNftContract = Fisch(_assetNft);
     }
+
+    function fetchAuction() public {}
+
+    function buyFixedSale() public payable {}
+
+    function cancelFixedSale() public {}
 
     function startAuction(
         uint256 tokenId,
@@ -88,9 +97,27 @@ contract Marketplace is ReentrancyGuard {
         );
     }
 
-    function placeBid(uint256 _auctionId) external payable {
+    // Function to receive Ether. msg.data must be empty
+    receive() external payable {
+        emit AmountReceived(msg.sender, msg.value);
+    }
+
+    // Fallback function is called when msg.data is not empty
+    fallback() external payable {}
+
+    function sendViaCall(address payable _to, uint256 _amount) public payable {
+        // Call returns a boolean value indicating success or failure.
+        // This is the current recommended method to use.
+        (bool sent, /*bytes memory data*/) = _to.call{value: _amount}("");
+        require(sent, "Failed to send Matic");
+        emit AmountSent(_to, _amount);
+    }        
+
+    function placeBid(uint256 _auctionId) public payable nonReentrant {
 
         require(block.timestamp < auctions[_auctionId].endTime, "Auction has ended");
+        require(msg.sender != auctions[_auctionId].seller, "you should are not allowed to place a bid on your own auction.");
+        require(msg.sender != address(0), "this is the address 0x00.. address");
 
         HighestBidder memory highestBidder = highestBids[_auctionId];
         uint256 minBid = highestBidder.bid.add(minimumBid);
@@ -100,9 +127,14 @@ contract Marketplace is ReentrancyGuard {
 
         require(msg.value > minBid, "Has not exceeded the best bid");
 
-        if (msg.sender != address(0)) {
-            
-        }
+        // Function to transfer Matic from this contract to address from input
+        sendViaCall(payable(highestBidder.bidder), highestBidder.bid);
+        delete highestBids[_auctionId];
+        highestBids[_auctionId] = HighestBidder(
+            msg.sender,
+            msg.value,
+            block.timestamp
+        );
 
         emit PlacedBid(
             msg.value, 
@@ -114,7 +146,7 @@ contract Marketplace is ReentrancyGuard {
     }
 
 
-    function endAuction(uint256 _auctionId) public payable {
+    function resultAuction(uint256 _auctionId) public payable {
         require(auctions[_auctionId].started, "The auction has not started yet");
         require(block.timestamp < auctions[_auctionId].endTime, "The auction has not ended yet");
 
