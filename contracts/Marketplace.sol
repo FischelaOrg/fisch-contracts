@@ -3,8 +3,10 @@ pragma solidity ^0.8.9;
 
 import "./Fisch.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract Marketplace is ReentrancyGuard {
+    using SafeMath for uint256;
 
     Fisch assetNftContract;
 
@@ -18,7 +20,7 @@ contract Marketplace is ReentrancyGuard {
         uint256 reservePrice,
         bool started
     );
-    event AuctionBid();
+    event PlacedBid(uint256 bidAmount, address bidder, uint256 bidTime, uint256 auctionId, uint256 tokenId);
     event AuctionCancelled(uint256 auctionId, uint256 tokenId, address seller);
     event AuctionEnded(uint256 auctionId, address winner, uint256 settledPrice);
 
@@ -65,7 +67,7 @@ contract Marketplace is ReentrancyGuard {
         );
 
         emit AuctionCreated(
-            acountId,
+            auctionId,
             tokenId,
             msg.sender,
             startTime,
@@ -88,28 +90,29 @@ contract Marketplace is ReentrancyGuard {
 
     function placeBid(uint256 _auctionId) external payable {
 
-        if (block.timestamp > auctions[_auctionId].endTime) {
-            revert("Auction has ended");
-        }
+        require(block.timestamp < auctions[_auctionId].endTime, "Auction has ended");
 
         HighestBidder memory highestBidder = highestBids[_auctionId];
         uint256 minBid = highestBidder.bid.add(minimumBid);
         if (highestBidder.bid == 0) {
-            minBid = highestBids[_auctionId].add(minimumBid);
+            minBid = highestBids[_auctionId].bid.add(minimumBid);
         }
 
-        if (msg.value < minBid) {
-            revert("Has not exceeded the best bid");
-        }
+        require(msg.value > minBid, "Has not exceeded the best bid");
 
         if (msg.sender != address(0)) {
             
         }
 
-        emit AuctionBid();
+        emit PlacedBid(
+            msg.value, 
+            msg.sender, 
+            block.timestamp, 
+            _auctionId, 
+            auctions[_auctionId].tokenId
+        );
     }
 
-    function cancelBid() public {}
 
     function endAuction(uint256 _auctionId) public payable {
         require(auctions[_auctionId].started, "The auction has not started yet");
@@ -119,7 +122,11 @@ contract Marketplace is ReentrancyGuard {
         assetNftContract.safeTransfer(msg.sender, highestBidder.bidder, auctions[_auctionId].tokenId);
         auctions[_auctionId].started = false;
 
-        emit AuctionEnded(_auctionId, highestBidder.bidder, highestBidder.bid);
+        emit AuctionEnded(
+            _auctionId, 
+            highestBidder.bidder, 
+            highestBidder.bid
+        );
     }    
 
 }
