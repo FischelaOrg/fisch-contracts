@@ -3,10 +3,13 @@ pragma solidity ^0.8.9;
 
 import "./Fisch.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract Marketplace is ReentrancyGuard {
     using SafeMath for uint256;
+    using Counters for Counters.Counter;
+    Counters.Counter private _auctionIdCounter;    
 
     Fisch assetNftContract;
 
@@ -52,19 +55,14 @@ contract Marketplace is ReentrancyGuard {
         assetNftContract = Fisch(_assetNft);
     }
 
-    function fetchAuction() public {}
-
-    function buyFixedSale() public payable {}
-
-    function cancelFixedSale() public {}
-
     function startAuction(
         uint256 tokenId,
         uint256 startTime,
         uint256 endTime,
         uint256 reservePrice
     ) external nonReentrant{
-        uint256 auctionId = nextAuctionId++;
+        uint256 auctionId = _auctionIdCounter.current();
+        _auctionIdCounter.increment();
 
         auctions[auctionId] = Auction(
             tokenId,
@@ -125,7 +123,7 @@ contract Marketplace is ReentrancyGuard {
             minBid = highestBids[_auctionId].bid.add(minimumBid);
         }
 
-        require(msg.value > minBid, "Has not exceeded the best bid");
+        require(msg.value >= minBid, "Has not exceeded the best bid");
 
         // Function to transfer Matic from this contract to address from input
         sendViaCall(payable(highestBidder.bidder), highestBidder.bid);
@@ -158,6 +156,22 @@ contract Marketplace is ReentrancyGuard {
             _auctionId, 
             highestBidder.bidder, 
             highestBidder.bid
+        );
+    }
+
+    function fetchAuction(
+        uint256 _auctionId
+    ) 
+        public view returns (
+            uint256 tokenId, 
+            address seller, 
+            uint256 startTime
+        ) 
+    {
+        return(
+            auctions[_auctionId].tokenId,
+            auctions[_auctionId].seller,
+            auctions[_auctionId].startTime
         );
     }    
 
