@@ -6,13 +6,17 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Fisch is ERC721URIStorage, ReentrancyGuard {
+
+contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIdCounter;
 
     using Strings for uint256;
     string public baseURI;
+
+    error AssetIsFrozen(uint256 tokenId);
 
     // EVENTS
     event MintedNft(
@@ -25,7 +29,8 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard {
         uint256 revenue,
         uint256 expenses,
         uint256 traffic,
-        string productLink);
+        string productLink
+    );
 
     struct DigitalAsset {
         address owner;
@@ -38,6 +43,8 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard {
         uint256 expenses;
         uint256 traffic;
         string productLink;
+        bool isFrozen;
+        address ownerEmail;
     }
     mapping(uint256 => DigitalAsset) public digitalAssets;
 
@@ -51,22 +58,38 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard {
         uint256 _revenue,
         uint256 _expenses,
         uint256 _traffic,
-        string memory _productLink
+        string memory _productLink,
+        address _ownerEmail
     ) public returns (uint256) {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
+        digitalAssets[tokenId] = DigitalAsset({
+            owner: msg.sender,
+            title: _title,
+            description: _description,
+            tokenId: tokenId,
+            price: _intialPrice,
+            assetURI: _assetURI,
+            revenue: _revenue,
+            expenses: _expenses,
+            traffic: _traffic,
+            productLink: _productLink,
+            isFrozen: false,
+            ownerEmail: _ownerEmail
+        });
+
         _safeMint(msg.sender, tokenId);
         _setTokenURI(tokenId, _assetURI);
         emit MintedNft(
             msg.sender,
-            _title, 
-            _description, 
-            tokenId, 
-            _assetURI, 
-            _intialPrice, 
-            _revenue, 
-            _expenses, 
-            _traffic, 
+            _title,
+            _description,
+            tokenId,
+            _assetURI,
+            _intialPrice,
+            _revenue,
+            _expenses,
+            _traffic,
             _productLink
         );
         return tokenId;
@@ -80,7 +103,40 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard {
         digitalAssets[tokenId].price = _price;
     }
 
-    function safeTransfer(address from, address to, uint256 tokenId) public nonReentrant {
-        _safeTransfer(from, to , tokenId, "");
+    function getNftItem(
+        uint256 _tokenId
+    ) public view returns (DigitalAsset memory) {
+        return digitalAssets[_tokenId];
     }
+
+    function freeze(uint256 _tokenId) public onlyOwner{
+        digitalAssets[_tokenId].isFrozen = true;
+    }
+
+     function unfreeze(uint256 _tokenId) public onlyOwner{
+        digitalAssets[_tokenId].isFrozen = false;
+    }
+
+    function safeTransfer(
+        address _from,
+        address _to,
+        uint256 _tokenId
+    ) public nonReentrant {
+        
+        _safeTransfer(_from, _to, _tokenId, "");
+    }
+
+    function safeTransferFrom(
+        address _from,
+        address _to,
+        uint256 _tokenId,
+        bytes memory data
+    ) public virtual override {
+        if (digitalAssets[_tokenId].isFrozen){
+            revert AssetIsFrozen(_tokenId);
+        }
+        safeTransferFrom(_from, _to, _tokenId, data);
+    }
+
+    
 }
