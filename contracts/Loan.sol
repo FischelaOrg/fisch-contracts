@@ -431,9 +431,7 @@ contract Loan is Ownable, ReentrancyGuard {
             _loanId
         );
     }
-
     // deactivate loan
-
     function deActivateLoan(
         uint256 _loanId
     ) public payable onlyLender(_lenders[_loanId].lender) {
@@ -454,11 +452,12 @@ contract Loan is Ownable, ReentrancyGuard {
     }
 
     // fetch borrow single
-function fetchBorrowSingle(
+    function fetchBorrowSingle(
         uint256 _borrowId
     ) public view returns (Borrower memory) {
         return _borrowers[_borrowId];
     }
+
     receive() external payable {}
 
     fallback() external payable {}
