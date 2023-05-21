@@ -17,7 +17,7 @@ describe("Loan functionalities", async() => {
     loan: Loan,
     fisch: Fisch;
 
-  let [lender, borrower] = await ethers.getSigners();
+  let [lender, borrower, liquidator] = await ethers.getSigners();
 
   beforeEach(async () => {
     await deployments.fixture(["all"]);
@@ -99,7 +99,7 @@ describe("Loan functionalities", async() => {
   });
 
   // it should liquidate collateral when loan duration passes
-  it(" should liquidate collateral when loan duration passes", async () => {
+  it(" should liquidate collateral when loan duration passes PRIVATE_SALE", async () => {
     const loanTx = await loan.createOrListLoan(5, 3);
     await loanTx.wait(3);
 
@@ -112,26 +112,59 @@ describe("Loan functionalities", async() => {
     const approveLoanTx = await loan.approveLoan(1);
     await approveLoanTx.wait(1);
 
-    let borrowValuesBefore = await loan.fetchBorrowSingle(1);
 
-    await moveTime(60 * 60 * 24 * 3) // move three days
+    await moveTime(60 * 60 * 24 * 7 * 4 * 5) // move three days
 
-    const repayLoanTx = await loan.connect(borrower).repayLoan(1, {value: ethers.utils.parseUnits("6", 18)});
-    repayLoanTx.wait(3);
+    const liquidateLoanTx = await loan.connect(liquidator).liquidateCollateral(1, "PRIVATE_SALE");
+    liquidateLoanTx.wait(3);
 
-    let borrowValuesAfter = await loan.fetchBorrowSingle(1);
-    assert(borrowValuesBefore.currentBorrowAmount > borrowValuesAfter.currentBorrowAmount);
+    let borrowValues = await loan.fetchBorrowSingle(1);
+    expect(ethers.utils.formatUnits(borrowValues.currentBorrowAmount, 18)).equal(0);
   });
 
   // it should give the lender ability to cancel loan
-  it(" should give the lender ability to cancel loan", async () => {});
+  it(" should give the lender ability to cancel loan", async () => {
+    const loanTx = await loan.createOrListLoan(5, 3);
+    await loanTx.wait(3);
+    const cancelLoanTx = await loan.cancelLoan(1);
+    cancelLoanTx.wait(2)
+    const loanValues = await loan.fetchLoanSingle(1);
+    assert(loanValues.isActive);
+    
+  });
 
   // it should give the lender ability to add funds
-  it(" should give the lender ability to add funds", async () => {});
+  it(" should give the lender ability to add funds", async () => {
+    const loanTx = await loan.createOrListLoan(5, 3);
+    await loanTx.wait(3);
+
+    let loanValuesBefore = await loan.fetchLoanSingle(1);
+    console.log("Initial Lend Amount: ", loanValuesBefore.innitialLendAmount);
+    const lockLoanTx = await loan.addfunds(1, {value: ethers.utils.parseUnits("5", 18)});
+    lockLoanTx.wait(3)
+
+    let loanValuesAfter = await loan.fetchLoanSingle(1);
+    expect(Number(ethers.utils.formatUnits(loanValuesAfter.innitialLendAmount, 18))).equal(10)
+
+  });
 
   // it should give the lender ability to lock and unlock loan
-  it(" should give the lender ability to lock and unlock loan", async () => {});
+  it(" should give the lender ability to lock loan", async () => {
+    const loanTx = await loan.createOrListLoan(5, 3);
+    await loanTx.wait(3);
+    const lockLoanTx = await loan.lockLoan(1);
+    lockLoanTx.wait(2)
+    const loanValues = await loan.fetchLoanSingle(1);
+    assert(loanValues.locked);
+  });
 
   // it should give the lender ability to cancel loan making it inactive.
-  it(" should give the lender ability to cancel loan making it inactive", async () => {});
+  it(" should give the lender ability to unlock loan", async () => {
+    const loanTx = await loan.createOrListLoan(5, 3);
+    await loanTx.wait(3);
+    const lockLoanTx = await loan.unlockLoan(1);
+    lockLoanTx.wait(2)
+    const loanValues = await loan.fetchLoanSingle(1);
+    assert(!loanValues.locked);
+  });
 });

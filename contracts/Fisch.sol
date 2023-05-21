@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-
 contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIdCounter;
@@ -32,6 +31,8 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
         string productLink
     );
 
+    event AssetPromotedToCollateral(uint256 _tokenId);
+
     struct DigitalAsset {
         address owner;
         string title;
@@ -45,7 +46,9 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
         string productLink;
         bool isFrozen;
         address ownerEmail;
+        bool isCollateral;
     }
+
     mapping(uint256 => DigitalAsset) public digitalAssets;
 
     constructor() ERC721("Fischela", "FIS") {}
@@ -75,7 +78,8 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
             traffic: _traffic,
             productLink: _productLink,
             isFrozen: false,
-            ownerEmail: _ownerEmail
+            ownerEmail: _ownerEmail,
+            isCollateral: false
         });
 
         _safeMint(msg.sender, tokenId);
@@ -95,8 +99,12 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
         return tokenId;
     }
 
-    function setBaseURI(string memory _baseURI) public {
-        baseURI = _baseURI;
+    function setBaseURI(string memory _baseURIStr) public onlyOwner {
+        baseURI = _baseURIStr;
+    }
+
+    function _baseURI() internal view virtual override returns (string memory) {
+        return baseURI;
     }
 
     function setPriceDigitalAsset(uint256 _price, uint256 tokenId) public {
@@ -109,11 +117,11 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
         return digitalAssets[_tokenId];
     }
 
-    function freeze(uint256 _tokenId) public onlyOwner{
+    function freeze(uint256 _tokenId) public onlyOwner {
         digitalAssets[_tokenId].isFrozen = true;
     }
 
-     function unfreeze(uint256 _tokenId) public onlyOwner{
+    function unfreeze(uint256 _tokenId) public onlyOwner {
         digitalAssets[_tokenId].isFrozen = false;
     }
 
@@ -122,7 +130,6 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
         address _to,
         uint256 _tokenId
     ) public nonReentrant {
-        
         _safeTransfer(_from, _to, _tokenId, "");
     }
 
@@ -132,11 +139,16 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
         uint256 _tokenId,
         bytes memory data
     ) public virtual override {
-        if (digitalAssets[_tokenId].isFrozen){
+        if (digitalAssets[_tokenId].isFrozen) {
             revert AssetIsFrozen(_tokenId);
         }
         safeTransferFrom(_from, _to, _tokenId, data);
     }
 
-    
+    function makeNftCollateral(uint256 _tokenId) public onlyOwner {
+        DigitalAsset storage digi = digitalAssets[_tokenId];
+        digi.isCollateral = true;
+
+        emit AssetPromotedToCollateral(_tokenId);
+    }
 }

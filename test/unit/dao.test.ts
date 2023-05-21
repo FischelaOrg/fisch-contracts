@@ -3,6 +3,7 @@ import {
   Loan,
   VillageSquare,
   CowriesToken,
+  Fisch,
 } from "../../typechain-types";
 import { deployments, ethers } from "hardhat";
 import { assert, expect } from "chai";
@@ -22,6 +23,7 @@ describe("VillageSquare Flow", async () => {
   let cowriesToken: CowriesToken;
   let timeLock: TimeLock;
   let loan: Loan;
+  let fisch: Fisch;
   const voteWay = 1; // for
   const reason = "I lika do da cha cha";
   beforeEach(async () => {
@@ -29,18 +31,19 @@ describe("VillageSquare Flow", async () => {
     villageSquare = await ethers.getContract("VillageSquare");
     timeLock = await ethers.getContract("TimeLock");
     cowriesToken = await ethers.getContract("CowriesToken");
+    fisch = await ethers.getContract("Fisch");
     loan = await ethers.getContract("Loan");
   });
 
   it("can only be changed through governance", async () => {
-    await expect(loan.store(55)).to.be.revertedWith(
+    await expect(fisch.makeNftCollateral(1)).to.be.revertedWith(
       "Ownable: caller is not the owner"
     );
   });
 
   it("proposes, votes, waits, queues, and then executes", async () => {
     // propose
-    const encodedFunctionCall = loan.interface.encodeFunctionData(FUNC, [
+    const encodedFunctionCall = fisch.interface.encodeFunctionData(FUNC, [
       NEW_STORE_VALUE,
     ]);
     const proposeTx = await villageSquare.propose(
@@ -93,6 +96,6 @@ describe("VillageSquare Flow", async () => {
       descriptionHash
     );
     await exTx.wait(1);
-    console.log((await loan.retrieve()).toString());
+    console.log((await fisch.getNftItem(1)).toString());
   });
 });
