@@ -454,11 +454,12 @@ contract Loan is Ownable, ReentrancyGuard {
     }
 
     // fetch borrow single
-function fetchBorrowSingle(
+    function fetchBorrowSingle(
         uint256 _borrowId
     ) public view returns (Borrower memory) {
         return _borrowers[_borrowId];
     }
+
     receive() external payable {}
 
     fallback() external payable {}
