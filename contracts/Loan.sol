@@ -105,7 +105,6 @@ contract Loan is Ownable, ReentrancyGuard {
     );
     event LoanUnLocked(uint256 loanId, bool locked);
     event LoanLocked(uint256 loanId, bool locked);
-    
 
     // errors
 
@@ -117,6 +116,12 @@ contract Loan is Ownable, ReentrancyGuard {
     // modifiers
     modifier onlyLender(address _lender) {
         require(msg.sender == _lender, "Sender not Lender");
+        _;
+    }
+
+    modifier onlyWhenOverdue(uint256 _borrowerId) {
+        Borrower memory borrower = _borrowers[_borrowerId];
+        require(block.timestamp > borrower.deadline, "Loan is not overdue");
         _;
     }
 
@@ -345,7 +350,7 @@ contract Loan is Ownable, ReentrancyGuard {
     function liquidateCollateral(
         uint256 _borrowerId,
         bytes memory _saleType
-    ) public payable onlyOwner {
+    ) public payable onlyOwner onlyWhenOverdue(_borrowerId) {
         // check that loan is overdue
         bytes32 theSaleType;
 
