@@ -103,7 +103,9 @@ contract Loan is Ownable, ReentrancyGuard {
         address lender,
         uint256 loanId
     );
-    event LoanDeactivated(uint256 loanId, bool isActive, bool locked);
+    event LoanUnLocked(uint256 loanId, bool locked);
+    event LoanLocked(uint256 loanId, bool locked);
+    
 
     // errors
 
@@ -129,7 +131,6 @@ contract Loan is Ownable, ReentrancyGuard {
     // createLoan
     function createOrListLoan(
         uint256 _interestRate,
-        uint256 _loanOutDuration,
         uint256 _loanDurationMonthCount
     ) public payable {
         // create Loan
@@ -145,7 +146,11 @@ contract Loan is Ownable, ReentrancyGuard {
             lender: msg.sender,
             innitialLendAmount: msg.value,
             interestRate: _interestRate,
-            loanOutDuration: _loanOutDuration,
+            loanOutDuration: convertMonthsToSeconds(
+                _loanDurationMonthCount != 0
+                    ? _loanDurationMonthCount
+                    : _defaultLoanDuration
+            ),
             borrowerId: 0,
             loanDurationInMonthCount: _loanDurationMonthCount != 0
                 ? _loanDurationMonthCount
@@ -180,6 +185,13 @@ contract Loan is Ownable, ReentrancyGuard {
         uint256 noOfWeeks
     ) public pure returns (uint256 secondsByWeeks) {
         return secondsByWeeks = noOfWeeks * 1 weeks;
+    }
+
+    function convertMonthsToSeconds(
+        uint256 _noOfMonth
+    ) public pure returns (uint256 secondsByMonth) {
+        uint256 weekds = convertMonthsToWeeks(_noOfMonth);
+        secondsByMonth = convertWeeksToSeconds(weekds);
     }
 
     // first create a function to borrow all
@@ -268,13 +280,11 @@ contract Loan is Ownable, ReentrancyGuard {
         // set loan deadline
         borrower.deadline =
             block.timestamp +
-            convertWeeksToSeconds(
-                convertMonthsToWeeks(lender.loanDurationInMonthCount)
-            );
+            convertMonthsToSeconds(lender.loanDurationInMonthCount);
 
         // add loan amount to borrower
         borrower.currentBorrowAmount += borrower.innitialBorrowAmount;
-
+        borrower.isApproved = true;
         // transfer loan to msgSender
         (bool success, ) = msg.sender.call{
             value: borrower.innitialBorrowAmount
@@ -434,16 +444,18 @@ contract Loan is Ownable, ReentrancyGuard {
 
     // deactivate loan
 
-    function deActivateLoan(
+    function lockLoan(
         uint256 _loanId
     ) public payable onlyLender(_lenders[_loanId].lender) {
-        _lenders[_loanId].isActive = false;
         _lenders[_loanId].locked = false;
-        emit LoanDeactivated(
-            _loanId,
-            _lenders[_loanId].isActive,
-            _lenders[_loanId].locked
-        );
+        emit LoanLocked(_loanId, _lenders[_loanId].locked);
+    }
+
+    function unlockLoan(
+        uint256 _loanId
+    ) public payable onlyLender(_lenders[_loanId].lender) {
+        _lenders[_loanId].locked = true;
+        emit LoanUnLocked(_loanId, _lenders[_loanId].locked);
     }
 
     // fetch loan single
