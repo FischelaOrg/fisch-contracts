@@ -9,9 +9,13 @@ import "hardhat-deploy";
 import { HardhatUserConfig } from "hardhat/config";
 
 const COINMARKETCAP_API_KEY = process.env.COINMARKETCAP_API_KEY || "";
-const SEPOLIA_RPC_URL =
-  process.env.SEPOLIA_RPC_URL ||
-  "https://eth-sepolia.g.alchemy.com/v2/YOUR-API-KEY";
+const MUMBAI_RPC_URL =
+  process.env.MUMBAI_RPC_URL ||
+  "https://matic-mumbai.chainstacklabs.com/";
+  const POLYGON_MAINNET_RPC =
+  process.env.POLYGON_MAINNET_RPC ||
+  "https://matic-mumbai.chainstacklabs.com/";
+
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "privatKey";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 
@@ -26,11 +30,16 @@ const config: HardhatUserConfig = {
       chainId: 31337,
       allowUnlimitedContractSize: true,
     },
-    // sepolia: {
-    //   url: SEPOLIA_RPC_URL,
-    //   accounts: [PRIVATE_KEY],
-    //   chainId: 11155111,
-    // },
+    mumbai: {
+      url: MUMBAI_RPC_URL,
+      accounts: [PRIVATE_KEY],
+      chainId: 80001,
+    },
+    polygon: {
+      url: POLYGON_MAINNET_RPC,
+      accounts: [PRIVATE_KEY],
+      chainId: 137,
+    },
   },
   solidity: {
     version: "0.8.9",
@@ -51,12 +60,21 @@ const config: HardhatUserConfig = {
   //   noColors: true,
   //   // coinmarketcap: COINMARKETCAP_API_KEY,
   // },
+
+  paths: {
+    // Specify the test directory
+    tests: "./test",
+  },
+
   namedAccounts: {
     deployer: {
       default: 0,
     },
-    player: {
+    liquidator: {
       default: 1,
+    },
+    borrower: {
+      default: 2,
     },
   },
   mocha: {

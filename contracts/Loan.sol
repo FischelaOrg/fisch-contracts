@@ -4,6 +4,8 @@ pragma solidity ^0.8.8;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+import "hardhat/console.sol";
 import "./Fisch.sol";
 
 contract Loan is Ownable, ReentrancyGuard {
@@ -217,7 +219,7 @@ contract Loan is Ownable, ReentrancyGuard {
             revert LoanNotActive();
         }
 
-        if (!_lenders[_lenderId].locked) {
+        if (_lenders[_lenderId].locked) {
             revert LoanIsLocked();
         }
 
@@ -262,16 +264,19 @@ contract Loan is Ownable, ReentrancyGuard {
         - freezes nft collateral
         - transfers loan to borrower
      */
-    function approveLoan(uint256 _borrowerId) public onlyOwner nonReentrant {
+    function approveLoan(uint256 _borrowerId) public nonReentrant {
         Borrower storage borrower = _borrowers[_borrowerId];
-        if (borrower.receiverAddress != msg.sender) {
-            revert SenderNotReceiver(borrower.receiverAddress, msg.sender);
-        }
 
         if (
             nftCollateral.ownerOf(borrower.nftCollateralTokenId) != msg.sender
         ) {
             revert("Sender not NFT owner");
+        }
+
+        if (
+            nftCollateral.getNftItem(borrower.nftCollateralTokenId).isCollateral
+        ) {
+            revert("NFT Is not Eligible as a Collateral");
         }
 
         // freeze NFT
@@ -438,6 +443,7 @@ contract Loan is Ownable, ReentrancyGuard {
         Lender storage lender = _lenders[_loanId];
         lender.currentAvailableLendAmount += msg.value;
         lender.innitialLendAmount += msg.value;
+        console.log("innitialLendAmount : ", lender.innitialLendAmount);
 
         emit FundsAdded(
             lender.currentAvailableLendAmount,
