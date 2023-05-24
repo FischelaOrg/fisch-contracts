@@ -9,29 +9,30 @@ const deployBox: DeployFunction = async function (
 ) {
   // @ts-ignore
   const { getNamedAccounts, deployments, network } = hre;
-  const { deploy, log } = deployments;
+  const { deploy, log, get } = deployments;
   const { deployer } = await getNamedAccounts();
+  const fischNftContract = await get("Fisch");
   log("----------------------------------------------------");
-  log("Deploying Box and waiting for confirmations...");
-  const box = await deploy("Loan", {
+  log("Deploying Marketplace and waiting for confirmations...", fischNftContract.address);
+  const marketplace = await deploy("Marketplace", {
     from: deployer,
-    args: [],
+    args: [fischNftContract.address],
     log: true,
     // we need to wait if on a live network so we can verify properly
     waitConfirmations: networkConfig[network.name].blockConfirmations || 1,
   });
-  log(`Loan at ${box.address}`);
+  log(`Marketplace at ${marketplace.address}`);
   if (
     !developmentChains.includes(network.name) &&
     process.env.ETHERSCAN_API_KEY
   ) {
-    await verify(box.address, []);
+    await verify(marketplace.address, []);
   }
-  const loanContract = await ethers.getContractAt("Loan", box.address);
+  const marketplaceContract = await ethers.getContractAt("Marketplace", marketplace.address);
   const timeLock = await ethers.getContract("TimeLock");
-  const transferTx = await loanContract.transferOwnership(timeLock.address);
+  const transferTx = await marketplaceContract.transferOwnership(timeLock.address);
   await transferTx.wait(1);
 };
 
 export default deployBox;
-deployBox.tags = ["all", "loan"];
+deployBox.tags = ["all", "marketplace"];
