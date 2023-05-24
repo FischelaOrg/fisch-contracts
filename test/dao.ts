@@ -28,6 +28,17 @@ describe("VillageSquare Flow", async () => {
   let fisch: Fisch;
   const voteWay = 1; // for
   const reason = "I lika do da cha cha";
+  let digi = {
+    title: "Grand Theft Auto 6",
+    description: "Grand theft auto Game rights",
+    price: ethers.utils.parseEther("5"),
+    assetURI: "www.grandTheftAuto",
+    revenue: ethers.utils.parseEther("3000"),
+    expenses: ethers.utils.parseEther("4000"),
+    traffic: ethers.utils.parseEther("3000000"),
+    productLink: "www.gta.com",
+    ownerEmail: "gta@gmail.com",
+  };
 
   beforeEach(async () => {
     await deployments.fixture(["all"]);
@@ -111,65 +122,66 @@ describe("VillageSquare Flow", async () => {
     });
     await loanTx.wait();
 
-    const numberOfMonths = await loan.fetchLoanSingle(1);
-    expect(numberOfMonths.loanDurationInMonthCount).equal(13);
+    const loanValues = await loan.fetchLoanSingle(1);
+    console.log(
+      `Current loan Duration ${
+        loanValues.loanDurationInMonthCount
+      } and Innitial Amount ${ethers.utils.formatEther(
+        loanValues.innitialLendAmount
+      )}`
+    );
+    expect(loanValues.loanDurationInMonthCount).equal(13);
   });
 
   // another user should borrow loan
   it(" should allow user borrow loan", async () => {
     let { deployer, borrower, liquidator } = await getNamedAccounts();
 
-    const loanTx = await loan.createOrListLoan(5, 13);
+    const loanTx = await loan.createOrListLoan(5, 13, {
+      value: ethers.utils.parseEther("100"),
+    });
     await loanTx.wait();
 
     const lendValues = await loan.fetchLoanSingle(1);
 
     const borrowTx = await loan
       .connect(await ethers.getSigner(borrower))
-      .borrow(1, ethers.utils.parseUnits("5", 18), 1, borrower);
+      .borrow(1, ethers.utils.parseUnits("5", 18), 0, borrower);
 
     await borrowTx.wait();
 
     let borrowValues = await loan.fetchBorrowSingle(1);
-    let si = await loan.calculateLoanInterest(
-      borrowValues.innitialBorrowAmount,
-      lendValues.interestRate,
-      lendValues.loanDurationInMonthCount
+
+    console.log(
+      `Current Borrowed Pending Loan: ${borrowValues.innitialBorrowAmount}`
     );
-    let amountOut =
-      Number(ethers.utils.formatEther(si)) +
-      Number(ethers.utils.formatEther(borrowValues.innitialBorrowAmount));
-    assert(
-      Number(
-        Number(
-          ethers.utils.formatEther(borrowValues.innitialBorrowAmount)
-        ).toFixed(2)
-      ) > 5
-    );
+    expect(
+      Number(ethers.utils.formatEther(borrowValues.innitialBorrowAmount))
+    ).equal(5);
   });
 
   // loan should be approved by lender
   it(" should allow lender approve loan", async () => {
     let { deployer, borrower, liquidator } = await getNamedAccounts();
 
-    const loanTx = await loan.createOrListLoan(5, 13);
+    const loanTx = await loan.createOrListLoan(
+      ethers.utils.parseEther("5"),
+      13,
+      {
+        value: ethers.utils.parseEther("100"),
+      }
+    );
     await loanTx.wait();
 
-    let mintNFTTx = await fisch.connect(borrower).mintNFT(
-      "Grand Theft Auto 6",
-      "Grand theft auto Game rights",
-      "www.grandTheftAuto",
-      ethers.utils.parseEther("5"),
-      ethers.utils.parseEther("3000"),
-      ethers.utils.parseEther("4000"),
-      ethers.utils.parseEther("3000000"),
-      "www.gta.com",
-      "gta@gmail.com"
-    );
+    let mintNFTTx = await fisch
+      .connect(await ethers.getSigner(borrower))
+      .mintNFT(digi);
+    console.log("GOT HERE");
+
     await mintNFTTx.wait();
     const borrowTx = await loan
       .connect(await ethers.getSigner(borrower))
-      .borrow(1, ethers.utils.parseUnits("5", 18), 1, borrower);
+      .borrow(1, ethers.utils.parseUnits("5", 18), 0, borrower);
 
     await borrowTx.wait();
 
@@ -180,19 +192,32 @@ describe("VillageSquare Flow", async () => {
 
     let borrowValues = await loan.fetchBorrowSingle(1);
 
+    console.log(
+      `Current Borrowed Approved Loan: ${borrowValues.innitialBorrowAmount}, amount to payback ${borrowValues.currentBorrowAmount}`
+    );
+
     assert(borrowValues.isApproved);
   });
 
   // it should give the borrower ability to repay loan
   it(" should give the borrower ability to repay loan", async () => {
-    let { deployer, borrower, liquidator } = await getNamedAccounts();
+    let { _, borrower, __ } = await getNamedAccounts();
 
-    const loanTx = await loan.createOrListLoan(5, 13);
+    const loanTx = await loan.createOrListLoan(5, 13, {
+      value: ethers.utils.parseEther("100"),
+    });
     await loanTx.wait();
+
+    let mintNFTTx = await fisch
+      .connect(await ethers.getSigner(borrower))
+      .mintNFT(digi);
+    console.log("GOT HERE");
+
+    await mintNFTTx.wait();
 
     const borrowTx = await loan
       .connect(await ethers.getSigner(borrower))
-      .borrow(1, ethers.utils.parseUnits("5", 18), 1, borrower);
+      .borrow(1, ethers.utils.parseUnits("5", 18), 0, borrower);
 
     await borrowTx.wait();
 
@@ -204,11 +229,14 @@ describe("VillageSquare Flow", async () => {
     await moveTime(60 * 60 * 24 * 3); // move three days
 
     const repayLoanTx = await loan
-      .connect(borrower)
+      .connect(await ethers.getSigner(borrower))
       .repayLoan(1, { value: ethers.utils.parseUnits("6", 18) });
     repayLoanTx.wait();
 
     let borrowValuesAfter = await loan.fetchBorrowSingle(1);
+    console.log(
+      `Amount in loan repaid ${borrowValuesAfter.amountAlreadyRemitted}, current Loan to be repaid ${borrowValuesAfter.currentBorrowAmount}`
+    );
     assert(
       borrowValuesBefore.currentBorrowAmount >
         borrowValuesAfter.currentBorrowAmount
@@ -219,44 +247,72 @@ describe("VillageSquare Flow", async () => {
   it(" should liquidate collateral when loan duration passes PRIVATE_SALE", async () => {
     let { deployer, borrower, liquidator } = await getNamedAccounts();
 
-    const loanTx = await loan.createOrListLoan(5, 3);
+    const loanTx = await loan.createOrListLoan(5, 3, {
+      value: ethers.utils.parseEther("100"),
+    });
     await loanTx.wait();
+
+    let mintNFTTx = await fisch
+      .connect(await ethers.getSigner(borrower))
+      .mintNFT(digi);
+    console.log("GOT HERE");
+
+    await mintNFTTx.wait();
+
+    // set approval for all
+    let approvalTx = await fisch
+      .connect(await ethers.getSigner(borrower))
+      .setApprovalForAll(loan.address, true);
+
+    await approvalTx.wait();
 
     const borrowTx = await loan
       .connect(await ethers.getSigner(borrower))
-      .borrow(1, ethers.utils.parseUnits("5", 18), 1, borrower);
+      .borrow(1, ethers.utils.parseUnits("5", 18), 0, borrower);
 
     await borrowTx.wait();
 
     const approveLoanTx = await loan.approveLoan(1);
     await approveLoanTx.wait(1);
 
-    await moveTime(60 * 60 * 24 * 7 * 4 * 5); // move three days
+    await moveTime(60 * 60 * 24 * 7 * 4 * 5); // move three months
 
     const liquidateLoanTx = await loan
       .connect(await ethers.getSigner(liquidator))
-      .liquidateCollateral(1, "PRIVATE_SALE");
+      .liquidateCollateral(1, "PRIVATE_SALE", {
+        value: ethers.utils.parseEther("5"),
+      });
     liquidateLoanTx.wait();
 
     let borrowValues = await loan.fetchBorrowSingle(1);
+    console.log(
+      "Check if Loan has been repaid: ",
+      borrowValues.isRepaid,
+      " current borrow amount ",
+      ethers.utils.formatEther(borrowValues.currentBorrowAmount)
+    );
     expect(
-      ethers.utils.formatUnits(borrowValues.currentBorrowAmount, 18)
+      Number(ethers.utils.formatEther(borrowValues.currentBorrowAmount))
     ).equal(0);
   });
 
   // it should give the lender ability to cancel loan
   it(" should give the lender ability to cancel loan", async () => {
-    const loanTx = await loan.createOrListLoan(5, 3);
+    const loanTx = await loan.createOrListLoan(5, 3, {
+      value: ethers.utils.parseEther("100"),
+    });
     await loanTx.wait();
     const cancelLoanTx = await loan.cancelLoan(1);
     cancelLoanTx.wait();
     const loanValues = await loan.fetchLoanSingle(1);
-    assert(loanValues.isActive);
+    assert(loanValues.isActive == false);
   });
 
   // it should give the lender ability to add funds
   it(" should give the lender ability to add funds", async () => {
-    const loanTx = await loan.createOrListLoan(5, 3);
+    const loanTx = await loan.createOrListLoan(5, 3, {
+      value: ethers.utils.parseEther("100"),
+    });
     await loanTx.wait();
 
     let loanValuesBefore = await loan.fetchLoanSingle(1);
@@ -267,30 +323,38 @@ describe("VillageSquare Flow", async () => {
     lockLoanTx.wait();
 
     let loanValuesAfter = await loan.fetchLoanSingle(1);
-    expect(
-      Number(ethers.utils.formatUnits(loanValuesAfter.innitialLendAmount, 18))
-    ).equal(10);
+    assert(
+      Number(ethers.utils.formatUnits(loanValuesAfter.innitialLendAmount, 18)) >
+        Number(
+          ethers.utils.formatUnits(loanValuesBefore.innitialLendAmount, 18)
+        )
+    );
   });
 
   // it should give the lender ability to lock and unlock loan
   it(" should give the lender ability to lock loan", async () => {
-    const loanTx = await loan.createOrListLoan(5, 3);
+    const loanTx = await loan.createOrListLoan(5, 3, {
+      value: ethers.utils.parseEther("100"),
+    });
     await loanTx.wait();
     const lockLoanTx = await loan.lockLoan(1);
     lockLoanTx.wait();
     const loanValues = await loan.fetchLoanSingle(1);
-    assert(loanValues.locked);
+    console.log(loanValues.locked);
+    assert(loanValues.locked == true);
   });
 
   // it should give the lender ability to cancel loan making it inactive.
   it(" should give the lender ability to unlock loan", async () => {
-    const loanTx = await loan.createOrListLoan(5, 3);
+    const loanTx = await loan.createOrListLoan(5, 3, {
+      value: ethers.utils.parseEther("100"),
+    });
     await loanTx.wait();
     const lockLoanTx = await loan.lockLoan(1);
     lockLoanTx.wait();
     const unlockLoanTx = await loan.unlockLoan(1);
     unlockLoanTx.wait();
     const loanValues = await loan.fetchLoanSingle(1);
-    assert(!loanValues.locked);
+    assert(loanValues.locked == false);
   });
 });
