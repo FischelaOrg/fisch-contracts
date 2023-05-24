@@ -5,8 +5,10 @@ import "./Fisch.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Marketplace is ReentrancyGuard {
+
+contract Marketplace is ReentrancyGuard, Ownable {
     using SafeMath for uint256;
     using Counters for Counters.Counter;
     Counters.Counter private _auctionIdCounter;    
@@ -125,8 +127,6 @@ contract Marketplace is ReentrancyGuard {
 
         require(msg.value >= minBid, "Has not exceeded the best bid");
 
-        // Function to transfer Matic from this contract to address from input
-        sendViaCall(payable(highestBidder.bidder), highestBidder.bid);
         delete highestBids[_auctionId];
         highestBids[_auctionId] = HighestBidder(
             msg.sender,
@@ -149,7 +149,9 @@ contract Marketplace is ReentrancyGuard {
         require(block.timestamp < auctions[_auctionId].endTime, "The auction has not ended yet");
 
         HighestBidder memory highestBidder = highestBids[_auctionId];
-        assetNftContract.safeTransfer(msg.sender, highestBidder.bidder, auctions[_auctionId].tokenId);
+        // Function to transfer Matic from this contract to address from input
+        sendViaCall(payable(auctions[_auctionId].seller), highestBidder.bid);
+        assetNftContract.safeTransfer(auctions[_auctionId].seller, highestBidder.bidder, auctions[_auctionId].tokenId);
         auctions[_auctionId].started = false;
 
         emit AuctionEnded(

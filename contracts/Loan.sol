@@ -4,10 +4,14 @@ pragma solidity ^0.8.8;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./Fisch.sol";
+
 
 contract Loan is Ownable, ReentrancyGuard {
     // default loan duration
+    using SafeMath for uint256;
     uint256 private _defaultLoanDuration = 12;
     uint256 public defaultInterestRate = 5;
     bytes32 public constant PUBLIC_SALE =
@@ -103,7 +107,8 @@ contract Loan is Ownable, ReentrancyGuard {
         address lender,
         uint256 loanId
     );
-    event LoanDeactivated(uint256 loanId, bool isActive, bool locked);
+    event LoanUnLocked(uint256 loanId, bool locked);
+    event LoanLocked(uint256 loanId, bool locked);
 
     // errors
 
@@ -118,6 +123,12 @@ contract Loan is Ownable, ReentrancyGuard {
         _;
     }
 
+    modifier onlyWhenOverdue(uint256 _borrowerId) {
+        Borrower memory borrower = _borrowers[_borrowerId];
+        require(block.timestamp > borrower.deadline, "Loan is not overdue");
+        _;
+    }
+
     // create a list of lenders
 
     mapping(uint256 => Lender) private _lenders;
@@ -129,7 +140,6 @@ contract Loan is Ownable, ReentrancyGuard {
     // createLoan
     function createOrListLoan(
         uint256 _interestRate,
-        uint256 _loanOutDuration,
         uint256 _loanDurationMonthCount
     ) public payable {
         // create Loan
@@ -145,7 +155,11 @@ contract Loan is Ownable, ReentrancyGuard {
             lender: msg.sender,
             innitialLendAmount: msg.value,
             interestRate: _interestRate,
-            loanOutDuration: _loanOutDuration,
+            loanOutDuration: convertMonthsToSeconds(
+                _loanDurationMonthCount != 0
+                    ? _loanDurationMonthCount
+                    : _defaultLoanDuration
+            ),
             borrowerId: 0,
             loanDurationInMonthCount: _loanDurationMonthCount != 0
                 ? _loanDurationMonthCount
@@ -182,6 +196,13 @@ contract Loan is Ownable, ReentrancyGuard {
         return secondsByWeeks = noOfWeeks * 1 weeks;
     }
 
+    function convertMonthsToSeconds(
+        uint256 _noOfMonth
+    ) public pure returns (uint256 secondsByMonth) {
+        uint256 weekds = convertMonthsToWeeks(_noOfMonth);
+        secondsByMonth = convertWeeksToSeconds(weekds);
+    }
+
     // first create a function to borrow all
     // Borrow
 
@@ -200,17 +221,11 @@ contract Loan is Ownable, ReentrancyGuard {
             revert LoanNotActive();
         }
 
-        if (!_lenders[_lenderId].locked) {
+        if (_lenders[_lenderId].locked) {
             revert LoanIsLocked();
         }
 
         // calculate amount to be repayed
-        uint256 conclusiveBorrowAmount = _borrowAmount +
-            calculateLoanInterest(
-                _borrowAmount,
-                _lenders[_lenderId].interestRate,
-                _lenders[_lenderId].loanDurationInMonthCount
-            );
 
         // create Loan
         _borrowersIds.increment();
@@ -219,7 +234,7 @@ contract Loan is Ownable, ReentrancyGuard {
             borrowerId: currentCounter,
             borrower: msg.sender,
             currentBorrowAmount: 0,
-            innitialBorrowAmount: conclusiveBorrowAmount,
+            innitialBorrowAmount: _borrowAmount,
             amountAlreadyRemitted: 0,
             deadline: 0,
             interest: 0,
@@ -245,40 +260,59 @@ contract Loan is Ownable, ReentrancyGuard {
         - freezes nft collateral
         - transfers loan to borrower
      */
-    function approveLoan(uint256 _borrowerId) public onlyOwner nonReentrant {
+    function approveLoan(uint256 _borrowerId) public nonReentrant {
         Borrower storage borrower = _borrowers[_borrowerId];
-        if (borrower.receiverAddress != msg.sender) {
-            revert SenderNotReceiver(borrower.receiverAddress, msg.sender);
+        Lender storage lender = _lenders[borrower.lenderId];
+
+        if (
+            nftCollateral.ownerOf(borrower.nftCollateralTokenId) !=
+            borrower.borrower
+        ) {
+            revert("Borrower not NFT owner");
         }
 
         if (
-            nftCollateral.ownerOf(borrower.nftCollateralTokenId) != msg.sender
+            nftCollateral.getNftItem(borrower.nftCollateralTokenId).isCollateral
         ) {
-            revert("Sender not NFT owner");
+            revert("NFT Is not Eligible as a Collateral");
+        }
+
+        if (lender.currentAvailableLendAmount < borrower.innitialBorrowAmount) {
+            revert("Not enough cash for Loan");
         }
 
         // freeze NFT
         nftCollateral.freeze(borrower.nftCollateralTokenId);
 
-        Lender storage lender = _lenders[borrower.lenderId];
-
+       
         // deduct loan amount from lender
-        lender.currentAvailableLendAmount -= borrower.innitialBorrowAmount;
+        lender.currentAvailableLendAmount = lender
+            .currentAvailableLendAmount
+            .sub(borrower.innitialBorrowAmount);
 
         // set loan deadline
-        borrower.deadline =
-            block.timestamp +
-            convertWeeksToSeconds(
-                convertMonthsToWeeks(lender.loanDurationInMonthCount)
-            );
+        borrower.deadline = block.timestamp.add(
+            convertMonthsToSeconds(lender.loanDurationInMonthCount)
+        );
 
         // add loan amount to borrower
-        borrower.currentBorrowAmount += borrower.innitialBorrowAmount;
+        borrower.currentBorrowAmount = borrower.currentBorrowAmount.add(
+            borrower.innitialBorrowAmount
+        );
+        borrower.isApproved = true;
 
         // transfer loan to msgSender
         (bool success, ) = msg.sender.call{
             value: borrower.innitialBorrowAmount
         }("");
+
+        borrower.innitialBorrowAmount = borrower.innitialBorrowAmount.add(
+            calculateLoanInterest(
+                borrower.innitialBorrowAmount,
+                lender.interestRate,
+                lender.loanDurationInMonthCount
+            )
+        );
 
         if (!success) {
             revert TransferFailed();
@@ -303,6 +337,7 @@ contract Loan is Ownable, ReentrancyGuard {
         // check if current msg.value repays loan
         Borrower storage borrower = _borrowers[_borrowerId];
         Lender storage lender = _lenders[borrower.lenderId];
+        if (msg.value > borrower.currentBorrowAmount) {}
 
         // transfer amount to lender
         lender.currentAvailableLendAmount += msg.value;
@@ -310,7 +345,13 @@ contract Loan is Ownable, ReentrancyGuard {
 
         // exonerate borrower
         borrower.amountAlreadyRemitted += msg.value;
-        borrower.currentBorrowAmount -= msg.value;
+        if (msg.value > borrower.currentBorrowAmount) {
+            borrower.currentBorrowAmount = 0;
+        }
+
+        if (msg.value <= borrower.currentBorrowAmount) {
+            borrower.currentBorrowAmount -= msg.value;
+        }
 
         if (borrower.amountAlreadyRemitted >= borrower.innitialBorrowAmount) {
             borrower.isRepaid = true;
@@ -334,16 +375,11 @@ contract Loan is Ownable, ReentrancyGuard {
      */
     function liquidateCollateral(
         uint256 _borrowerId,
-        bytes memory _saleType
-    ) public payable onlyOwner {
+        string memory _saleType
+    ) public payable onlyWhenOverdue(_borrowerId) {
         // check that loan is overdue
-        bytes32 theSaleType;
 
-        assembly {
-            theSaleType := mload(add(_saleType, 32))
-        }
-
-        bytes32 practicalSaleType = keccak256(abi.encode(theSaleType));
+        bytes32 practicalSaleType = keccak256(abi.encode(_saleType));
 
         // if liquidation sale type is public
         if (practicalSaleType == PUBLIC_SALE) {
@@ -386,6 +422,10 @@ contract Loan is Ownable, ReentrancyGuard {
         Borrower storage borrower = _borrowers[_borrowerId];
         Lender storage lender = _lenders[_lenderId];
 
+        if (msg.value < borrower.currentBorrowAmount) {
+            revert("Liquidator Amount: insufficient funds");
+        }
+
         // transfer nft value to liquidator
         nftCollateral.safeTransferFrom(
             borrower.borrower,
@@ -397,7 +437,14 @@ contract Loan is Ownable, ReentrancyGuard {
         lender.amountRepaid += msg.value;
 
         // exonerate borrower
-        borrower.currentBorrowAmount -= msg.value;
+        if (msg.value > borrower.currentBorrowAmount) {
+            borrower.currentBorrowAmount = 0;
+            borrower.isRepaid = true;
+        }
+
+        if (msg.value <= borrower.currentBorrowAmount) {
+            borrower.currentBorrowAmount -= msg.value;
+        }
         borrower.amountAlreadyRemitted += msg.value;
     }
 
@@ -434,16 +481,18 @@ contract Loan is Ownable, ReentrancyGuard {
 
     // deactivate loan
 
-    function deActivateLoan(
+    function lockLoan(
         uint256 _loanId
     ) public payable onlyLender(_lenders[_loanId].lender) {
-        _lenders[_loanId].isActive = false;
+        _lenders[_loanId].locked = true;
+        emit LoanLocked(_loanId, _lenders[_loanId].locked);
+    }
+
+    function unlockLoan(
+        uint256 _loanId
+    ) public payable onlyLender(_lenders[_loanId].lender) {
         _lenders[_loanId].locked = false;
-        emit LoanDeactivated(
-            _loanId,
-            _lenders[_loanId].isActive,
-            _lenders[_loanId].locked
-        );
+        emit LoanUnLocked(_loanId, _lenders[_loanId].locked);
     }
 
     // fetch loan single
