@@ -43,7 +43,7 @@ describe("VillageSquare Flow", async () => {
   beforeEach(async () => {
     await deployments.fixture(["all"]);
     villageSquare = await ethers.getContract("VillageSquare");
-    timeLock = await ethers.getContract("TimeLock");
+    timeLock = await ethers.getContract("LockController");
     cowriesToken = await ethers.getContract("CowriesToken");
     fisch = await ethers.getContract("Fisch");
     loan = await ethers.getContract("Loan");
@@ -112,6 +112,37 @@ describe("VillageSquare Flow", async () => {
     );
     await exTx.wait(1);
   });
+
+});
+
+
+describe("Loan Flow", async () => {
+  let villageSquare: VillageSquare;
+  let cowriesToken: CowriesToken;
+  let timeLock: LockController;
+  let loan: Loan;
+  let fisch: Fisch;
+  let digi = {
+    title: "Grand Theft Auto 6",
+    description: "Grand theft auto Game rights",
+    price: ethers.utils.parseEther("5"),
+    assetURI: "www.grandTheftAuto",
+    revenue: ethers.utils.parseEther("3000"),
+    expenses: ethers.utils.parseEther("4000"),
+    traffic: ethers.utils.parseEther("3000000"),
+    productLink: "www.gta.com",
+    ownerEmail: "gta@gmail.com",
+  };
+
+  beforeEach(async () => {
+    await deployments.fixture(["all"]);
+    villageSquare = await ethers.getContract("VillageSquare");
+    timeLock = await ethers.getContract("LockController");
+    cowriesToken = await ethers.getContract("CowriesToken");
+    fisch = await ethers.getContract("Fisch");
+    loan = await ethers.getContract("Loan");
+  });
+
 
   // loan part
 
