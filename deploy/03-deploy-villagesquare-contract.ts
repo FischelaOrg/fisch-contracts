@@ -17,10 +17,10 @@ const deployVillageSquareContract: DeployFunction = async function (
   const { deploy, log, get } = deployments;
   const { deployer } = await getNamedAccounts();
   const cowriesToken = await get("CowriesToken");
-  const timeLock = await get("TimeLock");
+  const lockController = await get("LockController");
   const args = [
     cowriesToken.address,
-    timeLock.address,
+    lockController.address,
     QUORUM_PERCENTAGE,
     VOTING_PERIOD,
     VOTING_DELAY,

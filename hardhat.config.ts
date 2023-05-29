@@ -50,15 +50,15 @@ const config: HardhatUserConfig = {
       },
     },
   },
-  // etherscan: {
-  //   apiKey: ETHERSCAN_API_KEY,
-  // },
+  etherscan: {
+    apiKey: ETHERSCAN_API_KEY,
+  },
   // gasReporter: {
   //   enabled: true,
   //   currency: "USD",
   //   outputFile: "gas-report.txt",
   //   noColors: true,
-  //   // coinmarketcap: COINMARKETCAP_API_KEY,
+  //   coinmarketcap: COINMARKETCAP_API_KEY,
   // },
 
   paths: {

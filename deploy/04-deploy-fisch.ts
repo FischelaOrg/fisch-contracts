@@ -9,7 +9,7 @@ const deployFisch: DeployFunction = async function (hre: HardhatRuntimeEnvironme
     const { getNamedAccounts, deployments, network } = hre
     const { deploy, log, get } = deployments
     const { deployer } = await getNamedAccounts()
-    const timelock = await ethers.getContract("TimeLock", deployer);
+    const lockController = await get("LockController");
     log("----------------------------------------------------")
     log("Deploying Fisch and waiting for confirmations...")
     
@@ -20,13 +20,16 @@ const deployFisch: DeployFunction = async function (hre: HardhatRuntimeEnvironme
         // we need to wait if on a live network so we can verify properly
         waitConfirmations: networkConfig[network.name].blockConfirmations || 1,
       })
-      log(`TimeLock at ${timelock.address}`)
+      log(`LockController at ${lockController.address}, ${deployer}`)
 
-      const fischContract = await ethers.getContractAt("Fisch", fisch.address)
-      await fischContract.transferOwnership(timelock.address)
+
+      const fischContract = await ethers.getContractAt("Fisch", fisch.address, deployer)
+      log(`Current owner: ${await fischContract.owner()}, probable owner: ${deployer} contract address: ${fisch.address} new Contract: ${fischContract.address}`)
+
+      await fischContract.transferOwnership(lockController.address)
 
       if (!developmentChains.includes(network.name) && process.env.ETHERSCAN_API_KEY) {
-        await verify(fisch.address, [])
+        await verify(fischContract.address, [])
       }    
 }
 

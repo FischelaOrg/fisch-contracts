@@ -7,11 +7,10 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-
 contract Marketplace is ReentrancyGuard, Ownable {
     using SafeMath for uint256;
     using Counters for Counters.Counter;
-    Counters.Counter private _auctionIdCounter;    
+    Counters.Counter private _auctionIdCounter;
 
     Fisch assetNftContract;
 
@@ -25,9 +24,16 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 reservePrice,
         bool started
     );
-    event PlacedBid(uint256 bidAmount, address bidder, uint256 bidTime, uint256 auctionId, uint256 tokenId);
+    event PlacedBid(
+        uint256 bidAmount,
+        address bidder,
+        uint256 bidTime,
+        uint256 auctionId,
+        uint256 tokenId
+    );
     event AuctionCancelled(uint256 auctionId, uint256 tokenId, address seller);
     event AuctionEnded(uint256 auctionId, address winner, uint256 settledPrice);
+    event AuctionConfirmed(uint256 auctionId, address winner, uint256 settledPrice);
     event AmountSent(address indexed to, uint256 indexed amount);
     event AmountReceived(address sender, uint256 amount);
 
@@ -40,6 +46,9 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 endTime;
         uint256 reservePrice;
         bool started;
+        bool resulted;
+        address buyer;
+        bool confirmed;
     }
 
     mapping(uint256 => Auction) public auctions;
@@ -52,7 +61,6 @@ contract Marketplace is ReentrancyGuard, Ownable {
     }
     mapping(uint256 => HighestBidder) public highestBids;
 
-
     constructor(address _assetNft) {
         assetNftContract = Fisch(_assetNft);
     }
@@ -62,7 +70,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 startTime,
         uint256 endTime,
         uint256 reservePrice
-    ) external nonReentrant{
+    ) external nonReentrant {
         uint256 auctionId = _auctionIdCounter.current();
         _auctionIdCounter.increment();
 
@@ -72,7 +80,10 @@ contract Marketplace is ReentrancyGuard, Ownable {
             startTime,
             endTime,
             reservePrice,
-            true
+            true,
+            false,
+            address(0),
+            false
         );
 
         emit AuctionCreated(
@@ -87,7 +98,10 @@ contract Marketplace is ReentrancyGuard, Ownable {
     }
 
     function cancelAuction(uint256 _auctionId) public {
-        require(auctions[_auctionId].seller == msg.sender, "You are not the seller");
+        require(
+            auctions[_auctionId].seller == msg.sender,
+            "You are not the seller"
+        );
 
         auctions[_auctionId].started = false;
         emit AuctionCancelled(
@@ -108,15 +122,20 @@ contract Marketplace is ReentrancyGuard, Ownable {
     function sendViaCall(address payable _to, uint256 _amount) public payable {
         // Call returns a boolean value indicating success or failure.
         // This is the current recommended method to use.
-        (bool sent, /*bytes memory data*/) = _to.call{value: _amount}("");
+        (bool sent /*bytes memory data*/, ) = _to.call{value: _amount}("");
         require(sent, "Failed to send Matic");
         emit AmountSent(_to, _amount);
-    }        
+    }
 
     function placeBid(uint256 _auctionId) public payable nonReentrant {
-
-        require(block.timestamp < auctions[_auctionId].endTime, "Auction has ended");
-        require(msg.sender != auctions[_auctionId].seller, "you should are not allowed to place a bid on your own auction.");
+        require(
+            block.timestamp < auctions[_auctionId].endTime,
+            "Auction has ended"
+        );
+        require(
+            msg.sender != auctions[_auctionId].seller,
+            "you should are not allowed to place a bid on your own auction."
+        );
         require(msg.sender != address(0), "this is the address 0x00.. address");
 
         HighestBidder memory highestBidder = highestBids[_auctionId];
@@ -135,46 +154,81 @@ contract Marketplace is ReentrancyGuard, Ownable {
         );
 
         emit PlacedBid(
-            msg.value, 
-            msg.sender, 
-            block.timestamp, 
-            _auctionId, 
+            msg.value,
+            msg.sender,
+            block.timestamp,
+            _auctionId,
             auctions[_auctionId].tokenId
         );
     }
 
+     // chainlink automation will be in charge of calling result Auction
+    function resultAuction(uint256 _auctionId) public {
+        require(
+            auctions[_auctionId].started,
+            "The auction has not started yet"
+        );
 
-    function resultAuction(uint256 _auctionId) public payable {
-        require(auctions[_auctionId].started, "The auction has not started yet");
-        require(block.timestamp < auctions[_auctionId].endTime, "The auction has not ended yet");
+        require(
+            block.timestamp < auctions[_auctionId].endTime,
+            "The auction has not ended yet"
+        );
 
         HighestBidder memory highestBidder = highestBids[_auctionId];
         // Function to transfer Matic from this contract to address from input
-        sendViaCall(payable(auctions[_auctionId].seller), highestBidder.bid);
-        assetNftContract.safeTransfer(auctions[_auctionId].seller, highestBidder.bidder, auctions[_auctionId].tokenId);
-        auctions[_auctionId].started = false;
-
-        emit AuctionEnded(
-            _auctionId, 
-            highestBidder.bidder, 
-            highestBidder.bid
+        assetNftContract.safeTransfer(
+            auctions[_auctionId].seller,
+            highestBidder.bidder,
+            auctions[_auctionId].tokenId
         );
+        auctions[_auctionId].started = false;
+        auctions[_auctionId].resulted = true;
+        auctions[_auctionId].buyer = highestBidder.bidder;
+
+        emit AuctionEnded(_auctionId, highestBidder.bidder, highestBidder.bid);
     }
+
+    function confirmAuction(uint256 _auctionId) public payable {
+        require(
+            auctions[_auctionId].started,
+            "The auction has not started yet"
+        );
+        require(
+            block.timestamp < auctions[_auctionId].endTime,
+            "The auction has not ended yet"
+        );
+
+        require(
+            auctions[_auctionId].resulted,
+            "Auction has not been resulted by the seller"
+        );
+
+        require(
+            auctions[_auctionId].buyer == msg.sender,
+            "Auction has not been resulted by the seller"
+        );
+        // require that auction has been resulted
+
+        HighestBidder memory highestBidder = highestBids[_auctionId];
+       
+
+        // Function to transfer Matic from this contract to address from input
+        sendViaCall(payable(auctions[_auctionId].seller), highestBidder.bid);
+        
+        auctions[_auctionId].confirmed = true;
+
+        emit AuctionConfirmed(_auctionId, highestBidder.bidder, highestBidder.bid);
+    }
+
+   
 
     function fetchAuction(
         uint256 _auctionId
-    ) 
-        public view returns (
-            uint256 tokenId, 
-            address seller, 
-            uint256 startTime
-        ) 
-    {
-        return(
+    ) public view returns (uint256 tokenId, address seller, uint256 startTime) {
+        return (
             auctions[_auctionId].tokenId,
             auctions[_auctionId].seller,
             auctions[_auctionId].startTime
         );
-    }    
-
+    }
 }

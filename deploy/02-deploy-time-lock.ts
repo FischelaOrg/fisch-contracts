@@ -9,8 +9,8 @@ const deployTimeLock: DeployFunction = async function (hre: HardhatRuntimeEnviro
   const { deploy, log } = deployments
   const { deployer } = await getNamedAccounts()
   log("----------------------------------------------------")
-  log("Deploying TimeLock and waiting for confirmations...")
-  const timeLock = await deploy("TimeLock", {
+  log("Deploying LockController and waiting for confirmations...")
+  const lockController = await deploy("LockController", {
     from: deployer,
     /**
      * Here we can set any address in admin role also zero address.
@@ -18,16 +18,17 @@ const deployTimeLock: DeployFunction = async function (hre: HardhatRuntimeEnviro
      * renounced as well. in later section so we are doing the same by giving admin role to
      * deployer and then renounced to keep the tutorial same.
      */
+    
     args: [MIN_DELAY, [], [], deployer],
     log: true,
     // we need to wait if on a live network so we can verify properly
     waitConfirmations: networkConfig[network.name].blockConfirmations || 1,
   })
-  log(`TimeLock at ${timeLock.address}`)
+  log(`TimeLock at ${lockController.address}`)
   if (!developmentChains.includes(network.name) && process.env.ETHERSCAN_API_KEY) {
-    await verify(timeLock.address, [])
+    await verify(lockController.address, [MIN_DELAY, [], [], deployer])
   }
 }
 
 export default deployTimeLock
-deployTimeLock.tags = ["all", "timelock"]
+deployTimeLock.tags = ["all", "lockController"]

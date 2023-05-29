@@ -26,11 +26,11 @@ const deployBox: DeployFunction = async function (
     !developmentChains.includes(network.name) &&
     process.env.ETHERSCAN_API_KEY
   ) {
-    await verify(marketplace.address, []);
+    await verify(marketplace.address, [fischNftContract.address]);
   }
   const marketplaceContract = await ethers.getContractAt("Marketplace", marketplace.address);
-  const timeLock = await ethers.getContract("TimeLock");
-  const transferTx = await marketplaceContract.transferOwnership(timeLock.address);
+  const lockController = await ethers.getContract("LockController");
+  const transferTx = await marketplaceContract.transferOwnership(lockController.address);
   await transferTx.wait(1);
 };
 

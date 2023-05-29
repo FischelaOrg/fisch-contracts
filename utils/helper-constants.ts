@@ -10,9 +10,12 @@ export interface networkConfigInfo {
 export const networkConfig: networkConfigInfo = {
   localhost: {},
   hardhat: {},
-  sepolia: {
+  polygon: {
     blockConfirmations: 6,
   },
+  mumbai:{
+    blockConfirmations: 6,
+  }
 }
 
 export const developmentChains = ["hardhat", "localhost"]

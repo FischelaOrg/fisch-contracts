@@ -1,5 +1,5 @@
 import {
-  TimeLock,
+  LockController,
   Loan,
   VillageSquare,
   CowriesToken,
@@ -23,7 +23,7 @@ import { Signer } from "ethers";
 describe("VillageSquare Flow", async () => {
   let villageSquare: VillageSquare;
   let cowriesToken: CowriesToken;
-  let timeLock: TimeLock;
+  let timeLock: LockController;
   let loan: Loan;
   let fisch: Fisch;
   const voteWay = 1; // for
