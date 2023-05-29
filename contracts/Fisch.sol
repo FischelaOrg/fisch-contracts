@@ -159,4 +159,5 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
 
         emit AssetPromotedToCollateral(_tokenId);
     }
+
 }

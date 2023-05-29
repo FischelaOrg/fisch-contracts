@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+import "hardhat/console.sol";
+
 contract Marketplace is ReentrancyGuard, Ownable {
     using SafeMath for uint256;
     using Counters for Counters.Counter;
@@ -37,7 +39,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     event AmountSent(address indexed to, uint256 indexed amount);
     event AmountReceived(address sender, uint256 amount);
 
-    uint256 minimumBid = 1e18;
+    uint256 public minimumBid = 1e18;
 
     struct Auction {
         uint256 tokenId;
@@ -67,17 +69,17 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
     function startAuction(
         uint256 tokenId,
-        uint256 startTime,
         uint256 endTime,
         uint256 reservePrice
     ) external nonReentrant {
         uint256 auctionId = _auctionIdCounter.current();
         _auctionIdCounter.increment();
+        
 
         auctions[auctionId] = Auction(
             tokenId,
             msg.sender,
-            startTime,
+            block.timestamp,
             endTime,
             reservePrice,
             true,
@@ -85,12 +87,13 @@ contract Marketplace is ReentrancyGuard, Ownable {
             address(0),
             false
         );
+        console.log("END TIME: %s", auctions[auctionId].endTime);
 
         emit AuctionCreated(
             auctionId,
             tokenId,
             msg.sender,
-            startTime,
+            block.timestamp,
             endTime,
             reservePrice,
             true
@@ -128,6 +131,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     }
 
     function placeBid(uint256 _auctionId) public payable nonReentrant {
+        console.log("block: %s, endTime: %s", block.timestamp, auctions[_auctionId].endTime);
         require(
             block.timestamp < auctions[_auctionId].endTime,
             "Auction has ended"
@@ -170,7 +174,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         );
 
         require(
-            block.timestamp < auctions[_auctionId].endTime,
+            block.timestamp > auctions[_auctionId].endTime,
             "The auction has not ended yet"
         );
 
@@ -189,12 +193,9 @@ contract Marketplace is ReentrancyGuard, Ownable {
     }
 
     function confirmAuction(uint256 _auctionId) public payable {
+        
         require(
-            auctions[_auctionId].started,
-            "The auction has not started yet"
-        );
-        require(
-            block.timestamp < auctions[_auctionId].endTime,
+            block.timestamp > auctions[_auctionId].endTime,
             "The auction has not ended yet"
         );
 

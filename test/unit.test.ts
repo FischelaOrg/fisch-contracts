@@ -4,6 +4,7 @@ import {
   VillageSquare,
   CowriesToken,
   Fisch,
+  Marketplace,
 } from "../typechain-types";
 import { deployments, ethers, getNamedAccounts } from "hardhat";
 import { assert, expect } from "chai";
@@ -18,8 +19,33 @@ import {
 import { moveBlocks } from "../utils/move-blocks";
 import { moveTime } from "../utils/move-time";
 import { Provider } from "@ethersproject/abstract-provider";
-import { Signer } from "ethers";
 
+// NFT TEST VAR
+let digi = {
+  title: "Grand Theft Auto 6",
+  description: "Grand theft auto Game rights",
+  price: ethers.utils.parseEther("5"),
+  assetURI: "www.grandTheftAuto",
+  revenue: ethers.utils.parseEther("3000"),
+  expenses: ethers.utils.parseEther("4000"),
+  traffic: ethers.utils.parseEther("3000000"),
+  productLink: "www.gta.com",
+  ownerEmail: "gta@gmail.com",
+};
+
+const fetchStarTime = () => {
+  const durationInSeconds = 7 * 24 * 60 * 60; // 1 day in seconds
+
+  // Get the current timestamp in seconds
+  const currentTimestampInSeconds = Math.floor(Date.now() / 1000);
+
+  // Calculate the future timestamp by adding the duration
+  const futureTimestampInSeconds =
+    currentTimestampInSeconds + durationInSeconds;
+  return futureTimestampInSeconds;
+};
+
+// DAO TEST
 describe("VillageSquare Flow", async () => {
   let villageSquare: VillageSquare;
   let cowriesToken: CowriesToken;
@@ -28,17 +54,6 @@ describe("VillageSquare Flow", async () => {
   let fisch: Fisch;
   const voteWay = 1; // for
   const reason = "I lika do da cha cha";
-  let digi = {
-    title: "Grand Theft Auto 6",
-    description: "Grand theft auto Game rights",
-    price: ethers.utils.parseEther("5"),
-    assetURI: "www.grandTheftAuto",
-    revenue: ethers.utils.parseEther("3000"),
-    expenses: ethers.utils.parseEther("4000"),
-    traffic: ethers.utils.parseEther("3000000"),
-    productLink: "www.gta.com",
-    ownerEmail: "gta@gmail.com",
-  };
 
   beforeEach(async () => {
     await deployments.fixture(["all"]);
@@ -112,9 +127,9 @@ describe("VillageSquare Flow", async () => {
     );
     await exTx.wait(1);
   });
-
 });
 
+// LOAN TEST
 
 describe("Loan Flow", async () => {
   let villageSquare: VillageSquare;
@@ -122,17 +137,17 @@ describe("Loan Flow", async () => {
   let timeLock: LockController;
   let loan: Loan;
   let fisch: Fisch;
-  let digi = {
-    title: "Grand Theft Auto 6",
-    description: "Grand theft auto Game rights",
-    price: ethers.utils.parseEther("5"),
-    assetURI: "www.grandTheftAuto",
-    revenue: ethers.utils.parseEther("3000"),
-    expenses: ethers.utils.parseEther("4000"),
-    traffic: ethers.utils.parseEther("3000000"),
-    productLink: "www.gta.com",
-    ownerEmail: "gta@gmail.com",
-  };
+  // let digi = {
+  //   title: "Grand Theft Auto 6",
+  //   description: "Grand theft auto Game rights",
+  //   price: ethers.utils.parseEther("5"),
+  //   assetURI: "www.grandTheftAuto",
+  //   revenue: ethers.utils.parseEther("3000"),
+  //   expenses: ethers.utils.parseEther("4000"),
+  //   traffic: ethers.utils.parseEther("3000000"),
+  //   productLink: "www.gta.com",
+  //   ownerEmail: "gta@gmail.com",
+  // };
 
   beforeEach(async () => {
     await deployments.fixture(["all"]);
@@ -142,7 +157,6 @@ describe("Loan Flow", async () => {
     fisch = await ethers.getContract("Fisch");
     loan = await ethers.getContract("Loan");
   });
-
 
   // loan part
 
@@ -387,5 +401,184 @@ describe("Loan Flow", async () => {
     unlockLoanTx.wait();
     const loanValues = await loan.fetchLoanSingle(1);
     assert(loanValues.locked == false);
+  });
+});
+
+// MARKETPLACE TEST
+
+describe("Marketplace Flow", async () => {
+  let villageSquare: VillageSquare;
+  let cowriesToken: CowriesToken;
+  let timeLock: LockController;
+  let marketplace: Marketplace;
+  let loan: Loan;
+  let fisch: Fisch;
+  let digi = {
+    title: "Grand Theft Auto 6",
+    description: "Grand theft auto Game rights",
+    price: ethers.utils.parseEther("5"),
+    assetURI: "www.grandTheftAuto",
+    revenue: ethers.utils.parseEther("3000"),
+    expenses: ethers.utils.parseEther("4000"),
+    traffic: ethers.utils.parseEther("3000000"),
+    productLink: "www.gta.com",
+    ownerEmail: "gta@gmail.com",
+  };
+
+  beforeEach(async () => {
+    await deployments.fixture(["all"]);
+    villageSquare = await ethers.getContract("VillageSquare");
+    timeLock = await ethers.getContract("LockController");
+    cowriesToken = await ethers.getContract("CowriesToken");
+    marketplace = await ethers.getContract("Marketplace");
+    fisch = await ethers.getContract("Fisch");
+    loan = await ethers.getContract("Loan");
+  });
+
+  // marketplace part
+
+  // it should start Auction
+  it("should start Auction", async () => {
+    let nftTx = await fisch.mintNFT(digi);
+    await nftTx.wait();
+
+    let startTime = fetchStarTime();
+    let marketplaceTx = await marketplace.startAuction(
+      0,
+      startTime,
+      ethers.utils.parseEther("1000")
+    );
+    await marketplaceTx.wait();
+    let auctionItem = await marketplace.auctions(0);
+    console.log(
+      "Auction reserver price: ",
+      Number(ethers.utils.formatEther(auctionItem.reservePrice))
+    );
+    assert(auctionItem.started == true);
+  });
+
+  // should cancel auction
+  it("should cancel auction", async () => {
+    let nftTx = await fisch.mintNFT(digi);
+    await nftTx.wait();
+    let startTime = fetchStarTime();
+    console.log(startTime);
+    let marketplaceTx = await marketplace.startAuction(
+      0,
+      startTime,
+      ethers.utils.parseEther("1000")
+    );
+    await marketplaceTx.wait();
+    let cancelAuctionTx = await marketplace.cancelAuction(0);
+    let auctionItem = await marketplace.auctions(0);
+
+    await cancelAuctionTx.wait();
+    assert(auctionItem.started == false);
+  });
+
+  // should place bid
+  it("should place bid", async () => {
+    let { _, __, ___, bidder } = await getNamedAccounts();
+    let nftTx = await fisch.mintNFT(digi);
+    await nftTx.wait();
+    let startTime = fetchStarTime();
+    console.log(startTime);
+
+    let marketplaceTx = await marketplace.startAuction(
+      0,
+      startTime,
+      ethers.utils.parseEther("1000")
+    );
+    await marketplaceTx.wait();
+
+    let minimumBid = await marketplace.minimumBid();
+    let bidderItem = await marketplace.highestBids(0);
+    let bidAmountToPlace =
+      Number(ethers.utils.formatEther(bidderItem.bid)) +
+      Number(ethers.utils.formatEther(minimumBid));
+
+    let placeBidTx = await marketplace
+      .connect(await ethers.getSigner(bidder))
+      .placeBid(0, {
+        value: ethers.utils.parseEther(bidAmountToPlace.toString()),
+      });
+    await placeBidTx.wait();
+
+    let newHighestbidderItem = await marketplace.highestBids(0);
+    expect(Number(ethers.utils.formatEther(newHighestbidderItem.bid))).equal(
+      bidAmountToPlace
+    );
+  });
+
+  // it should result auction
+  it("should result auction", async () => {
+    let { _, __, ___, bidder } = await getNamedAccounts();
+    let nftTx = await fisch.mintNFT(digi);
+    await nftTx.wait();
+    let startTime = fetchStarTime();
+    let marketplaceTx = await marketplace.startAuction(
+      0,
+      startTime,
+      ethers.utils.parseEther("1000")
+    );
+    await marketplaceTx.wait();
+
+    let minimumBid = await marketplace.minimumBid();
+    let bidderItem = await marketplace.highestBids(0);
+    let bidAmountToPlace =
+      Number(ethers.utils.formatEther(bidderItem.bid)) +
+      Number(ethers.utils.formatEther(minimumBid));
+
+    let placeBidTx = await marketplace
+      .connect(await ethers.getSigner(bidder))
+      .placeBid(0, {
+        value: ethers.utils.parseEther(bidAmountToPlace.toString()),
+      });
+    await placeBidTx.wait();
+    await moveTime(startTime + 1000);
+    let resultAuctiontx = await marketplace.resultAuction(0);
+    await resultAuctiontx.wait();
+    let newAuction = await marketplace.auctions(0);
+
+    assert(newAuction.resulted == true);
+  });
+
+  // it should confirm auction
+  it("should confirm auction", async () => {
+    let { _, __, ___, bidder } = await getNamedAccounts();
+    let nftTx = await fisch.mintNFT(digi);
+    await nftTx.wait();
+    let startTime = fetchStarTime();
+    let marketplaceTx = await marketplace.startAuction(
+      0,
+      startTime,
+      ethers.utils.parseEther("1000")
+    );
+    await marketplaceTx.wait();
+
+    let minimumBid = await marketplace.minimumBid();
+    let bidderItem = await marketplace.highestBids(0);
+    let bidAmountToPlace =
+      Number(ethers.utils.formatEther(bidderItem.bid)) +
+      Number(ethers.utils.formatEther(minimumBid));
+
+    let placeBidTx = await marketplace
+      .connect(await ethers.getSigner(bidder))
+      .placeBid(0, {
+        value: ethers.utils.parseEther(bidAmountToPlace.toString()),
+      });
+    await placeBidTx.wait();
+    await moveTime(startTime + 1000);
+
+    let resultAuctiontx = await marketplace.resultAuction(0);
+    await resultAuctiontx.wait();
+
+    let confirmTx = await marketplace
+      .connect(await ethers.getSigner(bidder))
+      .confirmAuction(0);
+    await confirmTx.wait();
+
+    let newAuctionItem = await marketplace.auctions(0);
+    assert(newAuctionItem.confirmed == true);
   });
 });

@@ -76,6 +76,10 @@ const config: HardhatUserConfig = {
     borrower: {
       default: 2,
     },
+
+    bidder: {
+      default: 3
+    }
   },
   mocha: {
     timeout: 200000, // 200 seconds max for running tests
