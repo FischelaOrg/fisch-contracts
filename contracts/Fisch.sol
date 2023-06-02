@@ -65,7 +65,9 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
 
     mapping(uint256 => DigitalAsset) public digitalAssets;
 
-    constructor() ERC721("Fischela", "FIS") {}
+    constructor() ERC721("Fischela", "FIS") {
+        _transferOwnership(msg.sender);
+    }
 
     function mintNFT(DigiAssetInput memory digi) public returns (uint256) {
         uint256 tokenId = _tokenIdCounter.current();
@@ -157,4 +159,5 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
 
         emit AssetPromotedToCollateral(_tokenId);
     }
+
 }

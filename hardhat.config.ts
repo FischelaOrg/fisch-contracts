@@ -50,15 +50,15 @@ const config: HardhatUserConfig = {
       },
     },
   },
-  // etherscan: {
-  //   apiKey: ETHERSCAN_API_KEY,
-  // },
+  etherscan: {
+    apiKey: ETHERSCAN_API_KEY,
+  },
   // gasReporter: {
   //   enabled: true,
   //   currency: "USD",
   //   outputFile: "gas-report.txt",
   //   noColors: true,
-  //   // coinmarketcap: COINMARKETCAP_API_KEY,
+  //   coinmarketcap: COINMARKETCAP_API_KEY,
   // },
 
   paths: {
@@ -76,6 +76,10 @@ const config: HardhatUserConfig = {
     borrower: {
       default: 2,
     },
+
+    bidder: {
+      default: 3
+    }
   },
   mocha: {
     timeout: 200000, // 200 seconds max for running tests
