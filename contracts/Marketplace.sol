@@ -6,14 +6,19 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-
+import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
 import "hardhat/console.sol";
 
-contract Marketplace is ReentrancyGuard, Ownable {
+contract Marketplace is
+    ReentrancyGuard,
+    Ownable,
+    AutomationCompatibleInterface
+{
     using SafeMath for uint256;
     using Counters for Counters.Counter;
     Counters.Counter private _auctionIdCounter;
-
+    uint256 lastPerformUpKeepTimestamp;
+    uint256 interval = 1 days;
     Fisch assetNftContract;
 
     // EVENTS
@@ -35,7 +40,11 @@ contract Marketplace is ReentrancyGuard, Ownable {
     );
     event AuctionCancelled(uint256 auctionId, uint256 tokenId, address seller);
     event AuctionEnded(uint256 auctionId, address winner, uint256 settledPrice);
-    event AuctionConfirmed(uint256 auctionId, address winner, uint256 settledPrice);
+    event AuctionConfirmed(
+        uint256 auctionId,
+        address winner,
+        uint256 settledPrice
+    );
     event AmountSent(address indexed to, uint256 indexed amount);
     event AmountReceived(address sender, uint256 amount);
 
@@ -74,7 +83,6 @@ contract Marketplace is ReentrancyGuard, Ownable {
     ) external nonReentrant {
         uint256 auctionId = _auctionIdCounter.current();
         _auctionIdCounter.increment();
-        
 
         auctions[auctionId] = Auction(
             tokenId,
@@ -131,7 +139,11 @@ contract Marketplace is ReentrancyGuard, Ownable {
     }
 
     function placeBid(uint256 _auctionId) public payable nonReentrant {
-        console.log("block: %s, endTime: %s", block.timestamp, auctions[_auctionId].endTime);
+        console.log(
+            "block: %s, endTime: %s",
+            block.timestamp,
+            auctions[_auctionId].endTime
+        );
         require(
             block.timestamp < auctions[_auctionId].endTime,
             "Auction has ended"
@@ -166,7 +178,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         );
     }
 
-     // chainlink automation will be in charge of calling result Auction
+    // chainlink automation will be in charge of calling result Auction
     function resultAuction(uint256 _auctionId) public {
         require(
             auctions[_auctionId].started,
@@ -193,7 +205,6 @@ contract Marketplace is ReentrancyGuard, Ownable {
     }
 
     function confirmAuction(uint256 _auctionId) public payable {
-        
         require(
             block.timestamp > auctions[_auctionId].endTime,
             "The auction has not ended yet"
@@ -211,17 +222,18 @@ contract Marketplace is ReentrancyGuard, Ownable {
         // require that auction has been resulted
 
         HighestBidder memory highestBidder = highestBids[_auctionId];
-       
 
         // Function to transfer Matic from this contract to address from input
         sendViaCall(payable(auctions[_auctionId].seller), highestBidder.bid);
-        
+
         auctions[_auctionId].confirmed = true;
 
-        emit AuctionConfirmed(_auctionId, highestBidder.bidder, highestBidder.bid);
+        emit AuctionConfirmed(
+            _auctionId,
+            highestBidder.bidder,
+            highestBidder.bid
+        );
     }
-
-   
 
     function fetchAuction(
         uint256 _auctionId
@@ -231,5 +243,40 @@ contract Marketplace is ReentrancyGuard, Ownable {
             auctions[_auctionId].seller,
             auctions[_auctionId].startTime
         );
+    }
+
+    function checkUpkeep(
+        bytes calldata /* checkData */
+    )
+        external
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory performData)
+    {
+        uint256[] memory dueAuctions = new uint256[](100);
+        uint8 currentArrayIndex = 0;
+        for (uint256 i = 0; i < _auctionIdCounter.current(); i++) {
+            if (auctions[i].endTime > block.timestamp && auctions[i].started && !auctions[i].resulted) {
+                if(dueAuctions.length < i) {
+                    dueAuctions[currentArrayIndex] = i;
+                    currentArrayIndex++;
+                }
+            }
+        }
+        upkeepNeeded = (block.timestamp - lastPerformUpKeepTimestamp) > interval && dueAuctions.length > 0;
+        performData = abi.encode(dueAuctions);
+        // We don't use the checkData in this example. The checkData is defined when the Upkeep was registered.
+    }
+
+    function performUpkeep(bytes calldata performData) external override {
+        (uint256[] memory dueAuctions) = abi.decode(performData, (uint256[]));
+
+        if ((block.timestamp - lastPerformUpKeepTimestamp) > interval && dueAuctions.length > 0){
+            lastPerformUpKeepTimestamp = block.timestamp;
+            for (uint256 i = 0; i < dueAuctions.length; i++){
+                resultAuction(dueAuctions[i]);
+            }
+
+        }
     }
 }
