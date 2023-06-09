@@ -9,8 +9,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 
-
-contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
+contract Fisch is Ownable , ERC721URIStorage, ReentrancyGuard {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIdCounter;
 
@@ -21,19 +20,22 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
 
     // EVENTS
     event MintedNft(
-        address indexed owner,
-        string ttile,
+        address owner,
+        string title,
         string description,
         uint256 tokenId,
-        string assetURI,
         uint256 price,
+        string assetURI,
         uint256 revenue,
         uint256 expenses,
         uint256 traffic,
-        string productLink
+        string productLink,
+        bool isFrozen,
+        string ownerEmail,
+        bool isCollateral
     );
 
-    event AssetPromotedToCollateral(uint256 _tokenId);
+    event AssetPromotedToCollateral(uint256 _tokenId, bool isCollateral);
 
     struct DigitalAsset {
         address owner;
@@ -66,7 +68,7 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
     mapping(uint256 => DigitalAsset) public digitalAssets;
 
     constructor() ERC721("Fischela", "FIS") {
-        _transferOwnership(msg.sender);
+        // _transferOwnership(msg.sender);
     }
 
     function mintNFT(DigiAssetInput memory digi) public returns (uint256) {
@@ -95,12 +97,15 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
             digi.title,
             digi.description,
             tokenId,
-            digi.assetURI,
             digi.price,
+            digi.assetURI,
             digi.revenue,
             digi.expenses,
             digi.traffic,
-            digi.productLink
+            digi.productLink,
+            false,
+            digi.ownerEmail,
+            false
         );
         return tokenId;
     }
@@ -153,11 +158,11 @@ contract Fisch is ERC721URIStorage, ReentrancyGuard, Ownable {
         super.safeTransferFrom(_from, _to, _tokenId, data);
     }
 
-    function makeNftCollateral(uint256 _tokenId) public onlyOwner {
+    function makeNftCollateral(uint256 _tokenId) public {
         DigitalAsset storage digi = digitalAssets[_tokenId];
         digi.isCollateral = true;
 
-        emit AssetPromotedToCollateral(_tokenId);
+        emit AssetPromotedToCollateral(_tokenId, true);
     }
 
 }

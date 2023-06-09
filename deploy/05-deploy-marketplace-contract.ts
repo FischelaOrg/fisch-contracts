@@ -28,10 +28,7 @@ const deployBox: DeployFunction = async function (
   ) {
     await verify(marketplace.address, [fischNftContract.address]);
   }
-  const marketplaceContract = await ethers.getContractAt("Marketplace", marketplace.address);
-  const lockController = await ethers.getContract("LockController");
-  const transferTx = await marketplaceContract.transferOwnership(lockController.address);
-  await transferTx.wait(1);
+  
 };
 
 export default deployBox;

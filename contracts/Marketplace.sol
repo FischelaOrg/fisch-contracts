@@ -24,12 +24,15 @@ contract Marketplace is
     // EVENTS
     event AuctionCreated(
         uint256 auctionId,
-        uint256 tokenId,
+       uint256 tokenId,
         address seller,
         uint256 startTime,
         uint256 endTime,
         uint256 reservePrice,
-        bool started
+        bool started,
+        bool resulted,
+        address buyer,
+        bool confirmed
     );
     event PlacedBid(
         uint256 bidAmount,
@@ -38,12 +41,13 @@ contract Marketplace is
         uint256 auctionId,
         uint256 tokenId
     );
-    event AuctionCancelled(uint256 auctionId, uint256 tokenId, address seller);
-    event AuctionEnded(uint256 auctionId, address winner, uint256 settledPrice);
+    event AuctionCancelled(uint256 auctionId, uint256 tokenId, address seller, bool started);
+    event AuctionEnded(uint256 auctionId, address winner, uint256 settledPrice, bool resulted, bool started);
     event AuctionConfirmed(
         uint256 auctionId,
         address winner,
-        uint256 settledPrice
+        uint256 settledPrice,
+        bool confirmed
     );
     event AmountSent(address indexed to, uint256 indexed amount);
     event AmountReceived(address sender, uint256 amount);
@@ -104,7 +108,10 @@ contract Marketplace is
             block.timestamp,
             endTime,
             reservePrice,
-            true
+            true,
+            false,
+            address(0),
+            false
         );
     }
 
@@ -118,7 +125,8 @@ contract Marketplace is
         emit AuctionCancelled(
             _auctionId,
             auctions[_auctionId].tokenId,
-            msg.sender
+            msg.sender,
+            false
         );
     }
 
@@ -201,7 +209,7 @@ contract Marketplace is
         auctions[_auctionId].resulted = true;
         auctions[_auctionId].buyer = highestBidder.bidder;
 
-        emit AuctionEnded(_auctionId, highestBidder.bidder, highestBidder.bid);
+        emit AuctionEnded(_auctionId, highestBidder.bidder, highestBidder.bid, true, false);
     }
 
     function confirmAuction(uint256 _auctionId) public payable {
@@ -231,7 +239,8 @@ contract Marketplace is
         emit AuctionConfirmed(
             _auctionId,
             highestBidder.bidder,
-            highestBidder.bid
+            highestBidder.bid,
+            true
         );
     }
 

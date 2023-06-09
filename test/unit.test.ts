@@ -53,7 +53,7 @@ describe("VillageSquare Flow", async () => {
   let loan: Loan;
   let fisch: Fisch;
   const voteWay = 1; // for
-  const reason = "I lika do da cha cha";
+  const reason = "make nft a collateral";
 
   beforeEach(async () => {
     await deployments.fixture(["all"]);

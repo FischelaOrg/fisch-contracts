@@ -10,9 +10,9 @@ const setupContracts: DeployFunction = async function (hre: HardhatRuntimeEnviro
   const { getNamedAccounts, deployments, network } = hre
   const { log } = deployments
   const { deployer } = await getNamedAccounts()
-  const governanceToken = await ethers.getContract("CowriesToken", deployer)
-  const lockController = await ethers.getContract("LockController", deployer)
-  const governor = await ethers.getContract("VillageSquare", deployer)
+  const governanceToken = await ethers.getContract("CowriesToken")
+  const lockController = await ethers.getContract("LockController")
+  const villageSquare = await ethers.getContract("VillageSquare")
 
   log("----------------------------------------------------")
   log("Setting up contracts for roles...")
@@ -20,13 +20,12 @@ const setupContracts: DeployFunction = async function (hre: HardhatRuntimeEnviro
   const proposerRole = await lockController.PROPOSER_ROLE()
   const executorRole = await lockController.EXECUTOR_ROLE()
   const adminRole = await lockController.TIMELOCK_ADMIN_ROLE()
-
-  const proposerTx = await lockController.grantRole(proposerRole, governor.address)
+  const proposerTx = await lockController.grantRole(proposerRole, villageSquare.address)
   await proposerTx.wait(1)
   const executorTx = await lockController.grantRole(executorRole, ADDRESS_ZERO)
   await executorTx.wait(1)
-  const revokeTx = await lockController.revokeRole(adminRole, deployer)
-  await revokeTx.wait(1)
+  // const revokeTx = await lockController.revokeRole(adminRole, deployer)
+  // await revokeTx.wait(1)
   // Guess what? Now, anything the timelock wants to do has to go through the governance process!
 }
 
