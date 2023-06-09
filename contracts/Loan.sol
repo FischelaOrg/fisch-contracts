@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./Fisch.sol";
 
-
 contract Loan is Ownable, ReentrancyGuard {
     // default loan duration
     using SafeMath for uint256;
@@ -61,14 +60,35 @@ contract Loan is Ownable, ReentrancyGuard {
 
     // events
 
-    event LoanCreated(uint256 amount, uint256 lenderId, address lender);
+    event LoanCreated(
+        uint256 loanId,
+        uint256 innitialLendAmount,
+        uint256 currentAvailableLendAmount,
+        uint256 amountRepaid,
+        uint256 borrowerId,
+        uint256 interestRate, // using compound interest SI = PRT/100 to calculate interest rate
+        uint256 loanOutDuration,
+        bool locked,
+        bool isActive,
+        address lender,
+        uint256 loanDurationInMonthCount
+    );
 
     event LoanBorrowed(
         uint256 borrowId,
         uint256 amount,
         uint256 lenderId,
         address lender,
-        address borrower
+        address borrower,
+        uint256 innitialBorrowAmount,
+        uint256 currentBorrowAmount,
+        uint256 amountAlreadyRemitted,
+        uint256 deadline,
+        uint256 interest,
+        uint256 nftCollateralTokenId,
+        address receiverAddress,
+        bool isApproved,
+        bool isRepaid
     );
 
     event LoanApproved(
@@ -76,14 +96,22 @@ contract Loan is Ownable, ReentrancyGuard {
         uint256 borrowerId,
         address lender,
         address borrower,
-        uint256 amount
+        uint256 amount,
+        uint256 deadline,
+        uint256 currentBorrowAmount,
+        bool isApproved
     );
     event LoanRepayed(
         uint256 lenderId,
         uint256 borrowerId,
         address lender,
         address borrower,
-        uint256 amount
+        uint256 amount,
+        uint256 currentAvailableLendAmount,
+        uint256 amountRepaid,
+        uint256 amountAlreadyRemitted,
+        uint256 currentBorrowAmount,
+        bool isRepaid
     );
     event CollateralLiquidated(
         uint256 lenderId,
@@ -91,7 +119,12 @@ contract Loan is Ownable, ReentrancyGuard {
         address lender,
         address borrower,
         uint256 amount,
-        address liquidator
+        address liquidator,
+        uint256 currentAvailableLendAmount,
+        uint256 amountRepaid,
+        uint256 currentBorrowAmount,
+        bool isRepaid,
+        uint256 amountAlreadyRemitted
     );
 
     event LoanCancelled(
@@ -167,9 +200,17 @@ contract Loan is Ownable, ReentrancyGuard {
         });
 
         emit LoanCreated(
+            _lenders[currentCounter].loanId,
             _lenders[currentCounter].innitialLendAmount,
-            currentCounter,
-            _lenders[currentCounter].lender
+            _lenders[currentCounter].currentAvailableLendAmount,
+            _lenders[currentCounter].amountRepaid,
+            _lenders[currentCounter].borrowerId,
+            _lenders[currentCounter].interestRate,
+            _lenders[currentCounter].loanOutDuration,
+            _lenders[currentCounter].locked,
+            _lenders[currentCounter].isActive,
+            _lenders[currentCounter].lender,
+            _lenders[currentCounter].loanDurationInMonthCount
         );
     }
 
@@ -213,15 +254,17 @@ contract Loan is Ownable, ReentrancyGuard {
         address receiverAddress
     ) public {
         // check if receiver address equals msg.sender
+        Lender memory lender = _lenders[_lenderId];
+
         if (receiverAddress != msg.sender) {
             revert SenderNotReceiver(msg.sender, receiverAddress);
         }
 
-        if (!_lenders[_lenderId].isActive) {
+        if (!lender.isActive) {
             revert LoanNotActive();
         }
 
-        if (_lenders[_lenderId].locked) {
+        if (lender.locked) {
             revert LoanIsLocked();
         }
 
@@ -245,12 +288,23 @@ contract Loan is Ownable, ReentrancyGuard {
             isRepaid: false
         });
 
+        Borrower memory borrower = _borrowers[currentCounter];
+
         emit LoanBorrowed(
-            _lenders[currentCounter].loanId,
-            _borrowers[currentCounter].innitialBorrowAmount,
+            lender.loanId, //loanId
+            borrower.innitialBorrowAmount, //
             _lenderId,
-            _lenders[_lenderId].lender,
-            _borrowers[currentCounter].borrower
+            lender.lender,
+            borrower.borrower,
+            borrower.currentBorrowAmount,
+            borrower.innitialBorrowAmount,
+            borrower.amountAlreadyRemitted,
+            borrower.deadline,
+            borrower.interest,
+            borrower.nftCollateralTokenId,
+            borrower.receiverAddress,
+            borrower.isApproved,
+            borrower.isRepaid
         );
     }
 
@@ -284,7 +338,6 @@ contract Loan is Ownable, ReentrancyGuard {
         // freeze NFT
         nftCollateral.freeze(borrower.nftCollateralTokenId);
 
-       
         // deduct loan amount from lender
         lender.currentAvailableLendAmount = lender
             .currentAvailableLendAmount
@@ -322,7 +375,10 @@ contract Loan is Ownable, ReentrancyGuard {
             _borrowerId,
             lender.lender,
             borrower.borrower,
-            borrower.innitialBorrowAmount
+            borrower.innitialBorrowAmount,
+            borrower.deadline,
+            borrower.currentBorrowAmount,
+            borrower.isApproved
         );
     }
 
@@ -363,7 +419,12 @@ contract Loan is Ownable, ReentrancyGuard {
             borrower.borrowerId,
             lender.lender,
             borrower.borrower,
-            msg.value
+            msg.value,
+            lender.currentAvailableLendAmount,
+            lender.amountRepaid,
+            borrower.amountAlreadyRemitted,
+            borrower.currentBorrowAmount,
+            borrower.isRepaid
         );
     }
 
@@ -378,6 +439,8 @@ contract Loan is Ownable, ReentrancyGuard {
         string memory _saleType
     ) public payable onlyWhenOverdue(_borrowerId) {
         // check that loan is overdue
+        Borrower memory borrower = _borrowers[_borrowerId];
+        Lender memory lender = _lenders[_borrowers[_borrowerId].lenderId];
 
         bytes32 practicalSaleType = keccak256(abi.encode(_saleType));
 
@@ -395,12 +458,17 @@ contract Loan is Ownable, ReentrancyGuard {
         );
 
         emit CollateralLiquidated(
-            _borrowers[_borrowerId].lenderId,
+            borrower.lenderId,
             _borrowerId,
-            _lenders[_borrowers[_borrowerId].lenderId].lender,
-            _borrowers[_borrowerId].borrower,
-            _borrowers[_borrowerId].innitialBorrowAmount,
-            msg.sender
+            lender.lender,
+            borrower.borrower,
+            borrower.innitialBorrowAmount,
+            msg.sender,
+            lender.currentAvailableLendAmount,
+            lender.amountRepaid,
+            borrower.currentBorrowAmount,
+            borrower.isRepaid,
+            borrower.amountAlreadyRemitted
         );
     }
 
